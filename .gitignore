@@ -17,3 +17,12 @@ npm-debug.log*
 # Temporary files
 *.tmp
 *.temp
+
+# Android build files
+local.properties
+*.iml
+.gradle/
+build/
+captures/
+.externalNativeBuild/
+.cxx/

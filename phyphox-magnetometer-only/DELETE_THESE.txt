@@ -1,0 +1,18 @@
+FILES AND DIRECTORIES TO DELETE FROM phyphox-android:
+
+DIRECTORIES (delete entire folders):
+- app/src/main/java/de/rwth_aachen/phyphox/camera/
+- app/src/main/java/de/rwth_aachen/phyphox/Bluetooth/
+- app/src/main/java/de/rwth_aachen/phyphox/NetworkConnection/
+
+FILES (delete these individual files):
+- app/src/main/java/de/rwth_aachen/phyphox/GpsInput.java
+- app/src/main/java/de/rwth_aachen/phyphox/GpsGeoid.java
+- app/src/main/java/de/rwth_aachen/phyphox/AudioOutput.java
+- app/src/main/java/de/rwth_aachen/phyphox/RemoteServer.java
+
+After deletion, the app will only have:
+- Magnetometer sensor support
+- Basic experiment framework
+- Data display/graphing
+- No camera, bluetooth, GPS, audio, or network features
