@@ -468,6 +468,56 @@
 				androidClicks: 0,
 				microteslas: 7185,
 				isDefault: true
+			},
+			{
+				id: 'default-architect',
+				name: 'The Architect (Strategy)',
+				deviceType: 'mobile',
+				freq: 40,
+				websiteVolume: 80,
+				placement: '<b>Left:</b> 5cm up/2.5cm in from eye. <b>Right:</b> 7.5cm up/5cm back from ear.',
+				description: 'Target: Logic (Left DLPFC) + Vision (Right Parietal)',
+				isDefault: true
+			},
+			{
+				id: 'default-save-button',
+				name: 'The Save Button (Fear Deletion)',
+				deviceType: 'mobile',
+				freq: 10,
+				websiteVolume: 80,
+				placement: '<b>Both:</b> 3cm directly above ear canal.',
+				description: 'Target: Amygdala & Memory Consolidation',
+				isDefault: true
+			},
+			{
+				id: 'default-god-orator-aggression',
+				name: 'The God-Orator (Aggression)',
+				deviceType: 'mobile',
+				freq: 25,
+				websiteVolume: 80,
+				placement: '<b>Left:</b> Temple 2.5cm fwd/1cm down. <b>Right:</b> 5cm up/2.5cm in from eye.',
+				description: 'Target: Speech (Broca) + Confidence (Right DLPFC)',
+				isDefault: true
+			},
+			{
+				id: 'default-god-orator-speed',
+				name: 'The God-Orator (Speed)',
+				deviceType: 'mobile',
+				freq: 40,
+				websiteVolume: 80,
+				placement: '<b>Left:</b> Temple 2.5cm fwd/1cm down. <b>Right:</b> 5cm up/2.5cm in from eye.',
+				description: 'Target: Speech (Broca) + Confidence (Right DLPFC)',
+				isDefault: true
+			},
+			{
+				id: 'default-pivot',
+				name: 'The Pivot (Creativity)',
+				deviceType: 'mobile',
+				freq: 40,
+				websiteVolume: 80,
+				placement: '<b>Left:</b> Temple (same). <b>Right:</b> 2.5cm up/5cm back from ear.',
+				description: 'Target: Speech (Broca) + Creativity (Right TPJ)',
+				isDefault: true
 			}
 		];
 
@@ -589,7 +639,15 @@
 				if (preset.freq) detailsText.push(preset.freq.toFixed(2) + ' Hz');
 				if (preset.websiteVolume !== undefined) detailsText.push('Vol: ' + preset.websiteVolume + '%');
 				if (preset.microteslas) detailsText.push(preset.microteslas + ' μT');
-				details.textContent = detailsText.join(' | ');
+
+				var detailsHtml = detailsText.join(' | ');
+				if (preset.description) {
+					detailsHtml += '<br><span style="font-size:11px; opacity:0.8; font-style:italic;">' + preset.description + '</span>';
+				}
+				if (preset.placement) {
+					detailsHtml += '<br><span style="font-size:11px; color:#a04000; display:block; margin-top:3px;">' + preset.placement + '</span>';
+				}
+				details.innerHTML = detailsHtml;
 
 				var buttons = document.createElement('div');
 				buttons.className = 'preset-buttons';
