@@ -43,68 +43,8 @@ if (window.matchMedia && window.matchMedia('(max-device-width: 390px)').matches)
 	margin-bottom: 8px;
 }
 
-#calculator-section {
-	margin-bottom: 30px;
-	padding: 15px;
-	background-color: rgba(251, 196, 157, 0.3);
-	border-radius: 3px;
-	border: solid 1px rgba(165, 95, 43, 0.3);
-}
-
-.calculator-form {
-	display: flex;
-	flex-direction: column;
-	gap: 10px;
+#device-selector {
 	margin-bottom: 15px;
-}
-
-.calculator-form label {
-	font-weight: 600;
-	font-size: 13px;
-	color: #7a3400;
-}
-
-.calculator-form select,
-.calculator-form input[type="number"] {
-	padding: 8px;
-	border: solid 1px #a55f2b;
-	border-radius: 3px;
-	background-color: #fff;
-	font-family: "Open Sans", sans-serif;
-	font-size: 14px;
-	color: #000;
-	width: 100%;
-	box-sizing: border-box;
-}
-
-.calculator-form select:focus,
-.calculator-form input[type="number"]:focus {
-	outline: none;
-	border-color: #874e23;
-	box-shadow: 0 0 5px rgba(135, 78, 35, 0.3);
-}
-
-#calculator-result {
-	padding: 10px;
-	background-color: rgba(255, 255, 255, 0.5);
-	border-radius: 3px;
-	border: solid 1px #a55f2b;
-}
-
-.quick-routines {
-	margin-top: 20px;
-}
-
-.routine-buttons {
-	display: flex;
-	flex-wrap: wrap;
-	gap: 8px;
-}
-
-.routine-buttons .routine-btn {
-	width: auto;
-	padding: 6px 12px;
-	font-size: 11px;
 }
 
 #presets-controls {
@@ -580,18 +520,24 @@ var PresetsManager = {
 			var loadBtn = document.createElement('button');
 			loadBtn.className = 'small-button';
 			loadBtn.textContent = 'Load';
-			loadBtn.onclick = function() { PresetsManager.loadPreset(preset); };
+			loadBtn.type = 'button';
+			loadBtn.addEventListener('click', function(e) {
+				e.preventDefault();
+				PresetsManager.loadPreset(preset);
+			});
 			
 			var deleteBtn = null;
 			if (!isDefault) {
 				deleteBtn = document.createElement('button');
 				deleteBtn.className = 'small-button';
 				deleteBtn.textContent = 'Delete';
-				deleteBtn.onclick = function() { 
+				deleteBtn.type = 'button';
+				deleteBtn.addEventListener('click', function(e) {
+					e.preventDefault();
 					if (confirm('Delete preset "' + (preset.name || 'Unnamed') + '"?')) {
 						PresetsManager.deletePreset(preset.id);
 					}
-				};
+				});
 			}
 			
 			buttons.appendChild(loadBtn);
@@ -640,7 +586,8 @@ var PresetsManager = {
 		// Setup calculator button for website volume
 		var calcBtn = document.getElementById('calc-website-volume-btn');
 		if (calcBtn) {
-			calcBtn.onclick = function() {
+			calcBtn.addEventListener('click', function(e) {
+				e.preventDefault();
 				var targetMicroteslas = parseFloat(microteslasInput.value);
 				if (!targetMicroteslas || targetMicroteslas <= 0) {
 					alert('Please enter a target micro teslas value first.');
@@ -648,9 +595,12 @@ var PresetsManager = {
 					return;
 				}
 				
-				// Get device type from selector
+				// Get device type from current device selector or preset dialog
+				var currentDeviceSelect = document.getElementById('current-device-select');
 				var deviceTypeSelect = document.getElementById('preset-device-type-input');
-				var deviceType = deviceTypeSelect ? deviceTypeSelect.value : 'mobile';
+				var deviceType = (deviceTypeSelect && deviceTypeSelect.value) || 
+				                (currentDeviceSelect && currentDeviceSelect.value) || 
+				                'mobile';
 				var sliderPercent = MicroTeslaCalculator.calculateWebsiteSlider(deviceType, targetMicroteslas);
 				
 				if (sliderPercent !== null) {
@@ -659,7 +609,7 @@ var PresetsManager = {
 				} else {
 					alert('Could not calculate. Please check your inputs.');
 				}
-			};
+			});
 		}
 		
 		dialog.style.display = 'block';
@@ -686,9 +636,13 @@ var PresetsManager = {
 		}
 		
 		var deviceTypeSelect = document.getElementById('preset-device-type-input');
+		var currentDeviceSelect = document.getElementById('current-device-select');
+		var deviceType = (deviceTypeSelect && deviceTypeSelect.value) || 
+		                (currentDeviceSelect && currentDeviceSelect.value) || 
+		                'mobile';
 		var preset = {
 			name: name,
-			deviceType: deviceTypeSelect ? deviceTypeSelect.value : 'mobile',
+			deviceType: deviceType,
 			freq: parseFloat(freqInput.value) || window.sliderFreq,
 			websiteVolume: parseInt(websiteVolInput.value) || Math.round(window.volume * 100),
 			ampVolume: parseInt(ampVolInput.value) || 50,
@@ -710,28 +664,31 @@ var PresetsManager = {
 };
 
 // Initialize presets when DOM is ready
-document.addEventListener('DOMContentLoaded', function() {
+function initializePresets() {
 	var createBtn = document.getElementById('create-preset-button');
 	var saveBtn = document.getElementById('preset-save-button');
 	var cancelBtn = document.getElementById('preset-cancel-button');
 	var dialog = document.getElementById('preset-dialog');
 	
 	if (createBtn) {
-		createBtn.onclick = function() {
+		createBtn.addEventListener('click', function(e) {
+			e.preventDefault();
 			PresetsManager.showCreateDialog();
-		};
+		});
 	}
 	
 	if (saveBtn) {
-		saveBtn.onclick = function() {
+		saveBtn.addEventListener('click', function(e) {
+			e.preventDefault();
 			PresetsManager.savePresetFromDialog();
-		};
+		});
 	}
 	
 	if (cancelBtn) {
-		cancelBtn.onclick = function() {
+		cancelBtn.addEventListener('click', function(e) {
+			e.preventDefault();
 			PresetsManager.hideCreateDialog();
-		};
+		});
 	}
 	
 	// Close dialog on outside click
@@ -761,90 +718,49 @@ document.addEventListener('DOMContentLoaded', function() {
 		PresetsManager.renderPresets();
 	}, 100);
 	
-	// Toggle calculator visibility
-	var toggleCalcBtn = document.getElementById('toggle-calculator-btn');
-	var calcSection = document.getElementById('calculator-section');
-	if (toggleCalcBtn && calcSection) {
-		var isCalculatorVisible = localStorage.getItem('calculatorVisible') === 'true';
-		if (isCalculatorVisible) {
-			calcSection.style.display = 'block';
-			toggleCalcBtn.textContent = 'Hide Auto Calculator';
+	// Device selector - save preference
+	var deviceSelect = document.getElementById('current-device-select');
+	if (deviceSelect) {
+		// Load saved device preference
+		var savedDevice = localStorage.getItem('selectedDevice');
+		if (savedDevice) {
+			deviceSelect.value = savedDevice;
 		}
 		
-		toggleCalcBtn.onclick = function() {
-			var isVisible = calcSection.style.display !== 'none';
-			if (isVisible) {
-				calcSection.style.display = 'none';
-				toggleCalcBtn.textContent = 'Show Auto Calculator';
-				localStorage.setItem('calculatorVisible', 'false');
-			} else {
-				calcSection.style.display = 'block';
-				toggleCalcBtn.textContent = 'Hide Auto Calculator';
-				localStorage.setItem('calculatorVisible', 'true');
-			}
-		};
+		deviceSelect.addEventListener('change', function() {
+			localStorage.setItem('selectedDevice', this.value);
+		});
 	}
-	
-	// Calculator functionality
-	var calculateBtn = document.getElementById('calculate-button');
-	if (calculateBtn) {
-		calculateBtn.onclick = function() {
-			var deviceType = document.getElementById('device-type-select').value;
-			var targetMicroteslas = parseFloat(document.getElementById('target-microteslas-input').value);
-			var resultDiv = document.getElementById('calculator-result');
-			
-			if (!targetMicroteslas || targetMicroteslas <= 0) {
-				resultDiv.innerHTML = '⚠ Please enter a valid target micro teslas value.';
-				resultDiv.style.color = '#a3523f';
-				return;
-			}
-			
-			var sliderPercent = MicroTeslaCalculator.calculateWebsiteSlider(deviceType, targetMicroteslas);
-			
-			if (sliderPercent === null) {
-				resultDiv.innerHTML = '⚠ Calculation error. Please check your inputs.';
-				resultDiv.style.color = '#a3523f';
-				return;
-			}
-			
-			var deviceName = deviceType === 'mobile' ? 'Mobile (Android 100%)' : 'PC (63% system)';
-			resultDiv.innerHTML = 
-				'<strong>Calculated Website Slider: ' + sliderPercent.toFixed(1) + '%</strong><br>' +
-				'Device: ' + deviceName + '<br>' +
-				'Target: ' + targetMicroteslas + ' μT<br>' +
-				'<button class="small-button" onclick="window.setVolume(' + (sliderPercent / 100) + ')" style="margin-top: 8px;">Apply to Website Slider</button>';
-			resultDiv.style.color = '#7a3400';
-		};
-	}
-	
-	// Quick routine buttons
-	var routineButtons = document.querySelectorAll('.routine-btn');
-	routineButtons.forEach(function(btn) {
-		btn.onclick = function() {
-			var routineName = this.getAttribute('data-routine');
-			MicroTeslaCalculator.applyRoutine(routineName);
-		};
-	});
 	
 	// Export presets button
 	var exportBtn = document.getElementById('export-presets-button');
 	if (exportBtn) {
-		exportBtn.onclick = function() {
+		exportBtn.addEventListener('click', function(e) {
+			e.preventDefault();
 			PresetsManager.exportPresetsAsCode();
-		};
+		});
 	}
 	
 	// Import presets button
 	var importBtn = document.getElementById('import-presets-button');
 	if (importBtn) {
-		importBtn.onclick = function() {
+		importBtn.addEventListener('click', function(e) {
+			e.preventDefault();
 			var code = prompt('Paste the preset code here (from user-presets.js or DefaultPresets array):');
 			if (code && code.trim()) {
 				PresetsManager.importPresetsFromCode(code);
 			}
-		};
+		});
 	}
-});
+}
+
+// Initialize when DOM is ready
+if (document.readyState === 'loading') {
+	document.addEventListener('DOMContentLoaded', initializePresets);
+} else {
+	// DOM already loaded
+	initializePresets();
+}
 </script>
 
 <script>
@@ -926,35 +842,13 @@ if (getCookie("ab-otgbanad") !== "y") { //user removed ads (does not include adb
 <div id="presets-section">
 	<h2>Presets</h2>
 	
-	<div id="calculator-toggle" style="margin-bottom: 15px;">
-		<button class="button" id="toggle-calculator-btn" style="font-size: 12px; padding: 6px 12px;">Show Auto Calculator</button>
-	</div>
-	
-	<div id="calculator-section" style="display: none;">
-		<h3>Auto Calculator</h3>
-		<div class="calculator-form">
-			<label>Device Type:</label>
-			<select id="device-type-select">
-				<option value="mobile">Mobile (Android 100% volume)</option>
-				<option value="pc">PC (63% system volume)</option>
-			</select>
-			
-			<label>Target Micro Teslas (μT):</label>
-			<input type="number" id="target-microteslas-input" step="0.01" min="0" placeholder="e.g., 55">
-			
-			<button class="button" id="calculate-button">Calculate Website Slider %</button>
-			<div id="calculator-result" style="margin-top: 10px; font-weight: 600; color: #7a3400;"></div>
-		</div>
-		
-		<div class="quick-routines">
-			<h4>Quick Routines (Mobile)</h4>
-			<div class="routine-buttons">
-				<button class="small-button routine-btn" data-routine="brain">Brain/Wit (40 Hz, 47%)</button>
-				<button class="small-button routine-btn" data-routine="soccer">Soccer Nerves (1000 Hz, 67%)</button>
-				<button class="small-button routine-btn" data-routine="safe-height">Safe Height (28 Hz, 100%)</button>
-				<button class="small-button routine-btn" data-routine="max-height">Max Height (28 Hz, 100%)</button>
-			</div>
-		</div>
+	<div id="device-selector" style="margin-bottom: 15px; padding: 10px; background-color: rgba(251, 196, 157, 0.3); border-radius: 3px; border: solid 1px rgba(165, 95, 43, 0.3);">
+		<label style="font-weight: 600; font-size: 13px; color: #7a3400; margin-right: 10px;">Your Device:</label>
+		<select id="current-device-select" style="padding: 6px; border: solid 1px #a55f2b; border-radius: 3px; background-color: #fff; font-family: 'Open Sans', sans-serif; font-size: 14px;">
+			<option value="">Select your device...</option>
+			<option value="mobile">Mobile (Android 100% volume)</option>
+			<option value="pc">PC (63% system volume)</option>
+		</select>
 	</div>
 	
 	<div id="presets-controls">
@@ -970,8 +864,9 @@ if (getCookie("ab-otgbanad") !== "y") { //user removed ads (does not include adb
 				<label>Preset Name:</label>
 				<input type="text" id="preset-name-input" placeholder="Enter preset name" maxlength="50">
 				
-				<label>Device Type:</label>
+				<label>Device Type (or use your selected device above):</label>
 				<select id="preset-device-type-input">
+					<option value="">Use current device selection</option>
 					<option value="mobile">Mobile (Android 100% volume)</option>
 					<option value="pc">PC (63% system volume)</option>
 				</select>
