@@ -1,0 +1,1135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<script>
+if (window.matchMedia && window.matchMedia('(max-device-width: 390px)').matches) {
+	viewport = document.querySelector('meta[name=viewport]');
+	if (viewport) viewport.setAttribute('content', 'width=390');
+}
+</script>
+<title>Online Tone Generator - generate pure tones of any frequency</title>
+<link href='https://fonts.googleapis.com/css?family=Open+Sans:400,400italic,600' rel='stylesheet' type='text/css'>
+<link rel="stylesheet" href="//ajax.googleapis.com/ajax/libs/jqueryui/1.11.4/themes/smoothness/jquery-ui.css">
+<script src="//ajax.googleapis.com/ajax/libs/jquery/1.12.0/jquery.min.js"></script>
+<script src="//ajax.googleapis.com/ajax/libs/jqueryui/1.11.4/jquery-ui.min.js"></script>
+<link rel="stylesheet" href="tone-generator.mini.css?20">
+<style>
+#presets-section {
+	margin: 40px 0;
+	padding: 20px;
+	background-color: rgba(255, 255, 255, 0.1);
+	border-radius: 5px;
+	border: solid 1px rgba(174, 98, 41, 0.3);
+}
+
+#presets-section h2 {
+	margin-top: 0;
+	margin-bottom: 15px;
+}
+
+#presets-section h3 {
+	font-size: 18px;
+	color: #7a3400;
+	margin-top: 20px;
+	margin-bottom: 10px;
+}
+
+#presets-section h4 {
+	font-size: 14px;
+	color: #8e420b;
+	margin-top: 15px;
+	margin-bottom: 8px;
+}
+
+#calculator-section {
+	margin-bottom: 30px;
+	padding: 15px;
+	background-color: rgba(251, 196, 157, 0.3);
+	border-radius: 3px;
+	border: solid 1px rgba(165, 95, 43, 0.3);
+}
+
+.calculator-form {
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+	margin-bottom: 15px;
+}
+
+.calculator-form label {
+	font-weight: 600;
+	font-size: 13px;
+	color: #7a3400;
+}
+
+.calculator-form select,
+.calculator-form input[type="number"] {
+	padding: 8px;
+	border: solid 1px #a55f2b;
+	border-radius: 3px;
+	background-color: #fff;
+	font-family: "Open Sans", sans-serif;
+	font-size: 14px;
+	color: #000;
+	width: 100%;
+	box-sizing: border-box;
+}
+
+.calculator-form select:focus,
+.calculator-form input[type="number"]:focus {
+	outline: none;
+	border-color: #874e23;
+	box-shadow: 0 0 5px rgba(135, 78, 35, 0.3);
+}
+
+#calculator-result {
+	padding: 10px;
+	background-color: rgba(255, 255, 255, 0.5);
+	border-radius: 3px;
+	border: solid 1px #a55f2b;
+}
+
+.quick-routines {
+	margin-top: 20px;
+}
+
+.routine-buttons {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+}
+
+.routine-buttons .routine-btn {
+	width: auto;
+	padding: 6px 12px;
+	font-size: 11px;
+}
+
+#presets-controls {
+	margin-bottom: 20px;
+}
+
+#presets-list {
+	margin-top: 15px;
+}
+
+.preset-item {
+	background-color: rgba(251, 196, 157, 0.6);
+	border: solid 1px #a55f2b;
+	border-radius: 3px;
+	padding: 12px;
+	margin-bottom: 10px;
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 10px;
+}
+
+.preset-name {
+	font-weight: 600;
+	font-size: 15px;
+	color: #7a3400;
+	flex: 1;
+	min-width: 150px;
+}
+
+.preset-details {
+	font-size: 12px;
+	color: #8e420b;
+	flex: 2;
+	min-width: 200px;
+}
+
+.preset-buttons {
+	display: flex;
+	gap: 8px;
+}
+
+.preset-buttons .small-button {
+	width: auto;
+	padding: 0 10px;
+	min-width: 50px;
+}
+
+#preset-dialog {
+	position: fixed;
+	top: 0;
+	left: 0;
+	right: 0;
+	bottom: 0;
+	background-color: rgba(0, 0, 0, 0.5);
+	z-index: 1000;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+}
+
+.preset-dialog-content {
+	background-color: #fbc49d;
+	border-radius: 5px;
+	padding: 25px;
+	max-width: 500px;
+	width: 90%;
+	box-shadow: 0 0 33px 11px rgba(0, 0, 0, 0.25);
+}
+
+.preset-dialog-content h3 {
+	margin-top: 0;
+	margin-bottom: 20px;
+	color: #7a3400;
+}
+
+.preset-form {
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+	margin-bottom: 20px;
+}
+
+.preset-form label {
+	font-weight: 600;
+	font-size: 13px;
+	color: #7a3400;
+	margin-bottom: 3px;
+}
+
+.preset-form input[type="text"],
+.preset-form input[type="number"],
+.preset-form select {
+	padding: 8px;
+	border: solid 1px #a55f2b;
+	border-radius: 3px;
+	background-color: #fff;
+	font-family: "Open Sans", sans-serif;
+	font-size: 14px;
+	color: #000;
+	width: 100%;
+	box-sizing: border-box;
+}
+
+.preset-form input[type="text"]:focus,
+.preset-form input[type="number"]:focus,
+.preset-form select:focus {
+	outline: none;
+	border-color: #874e23;
+	box-shadow: 0 0 5px rgba(135, 78, 35, 0.3);
+}
+
+.preset-dialog-buttons {
+	display: flex;
+	gap: 10px;
+	justify-content: flex-end;
+}
+
+.preset-dialog-buttons .button {
+	padding: 8px 20px;
+	font-size: 13px;
+}
+
+@media screen and (max-width: 701px) {
+	.preset-item {
+		flex-direction: column;
+		align-items: flex-start;
+	}
+	
+	.preset-name,
+	.preset-details {
+		width: 100%;
+	}
+	
+	.preset-buttons {
+		width: 100%;
+		justify-content: flex-end;
+	}
+}
+</style>
+<link rel="shortcut icon" href="tone-generator-favicon.png">
+<link rel="apple-touch-icon" href="tone-generator-apple.png" sizes="180x180">
+<script src="frequency-generator.mini.js?23"></script>
+
+<script>
+// Auto Calculator for Micro Teslas
+var MicroTeslaCalculator = {
+	// Calibration data based on measurements
+	calibration: {
+		mobile: {
+			maxVolume: 100, // Android system volume at 100%
+			maxMicroteslas: 7185, // Peak at 100% volume
+			maxVoltage: 1.0, // Equivalent to PC 63%
+			websiteSliderAtMax: 100 // Website slider at 100%
+		},
+		pc: {
+			maxVolume: 63, // PC system volume at 63%
+			maxMicroteslas: 7080, // Peak at 63% volume
+			maxVoltage: 1.0,
+			websiteSliderAtMax: 100
+		}
+	},
+	
+	// Known voltage/microtesla relationships
+	voltageToMicroteslas: {
+		0.22: 55, // Brain/Wit setting (PC 30%)
+		0.44: 110, // Soccer Nerves (approximate)
+		1.0: 7080 // Max PC setting
+	},
+	
+	calculateWebsiteSlider: function(deviceType, targetMicroteslas) {
+		var cal = this.calibration[deviceType];
+		if (!cal || !targetMicroteslas || targetMicroteslas <= 0) {
+			return null;
+		}
+		
+		// Calculate ratio: target / max
+		var ratio = targetMicroteslas / cal.maxMicroteslas;
+		
+		// Convert to website slider percentage (0-100)
+		var sliderPercent = Math.round(ratio * 100 * 100) / 100; // Round to 2 decimals
+		
+		// Clamp between 1 and 100
+		sliderPercent = Math.max(1, Math.min(100, sliderPercent));
+		
+		return sliderPercent;
+	},
+	
+	// Quick routines for mobile
+	routines: {
+		brain: {
+			freq: 40,
+			websiteSlider: 47,
+			microteslas: 55,
+			voltage: 0.22,
+			description: "Brain/Wit - Perfect 'Whisper' (55 μT)"
+		},
+		soccer: {
+			freq: 1000,
+			websiteSlider: 67,
+			microteslas: 110,
+			voltage: 0.44,
+			description: "Soccer Nerves - Nerve Priming"
+		},
+		'safe-height': {
+			freq: 28,
+			websiteSlider: 95,
+			microteslas: 6726,
+			voltage: 0.95,
+			description: "Safe Height - Growth Signal (matches PC 63%)"
+		},
+		'max-height': {
+			freq: 28,
+			websiteSlider: 100,
+			microteslas: 7185,
+			voltage: 1.0,
+			description: "Max Height - Maximum Power"
+		}
+	},
+	
+	applyRoutine: function(routineName) {
+		var routine = this.routines[routineName];
+		if (!routine) return;
+		
+		// Set frequency
+		if (routine.freq && window.setFreq) {
+			window.setFreq(routine.freq);
+		}
+		
+		// Set website volume slider
+		if (routine.websiteSlider && window.setVolume) {
+			window.setVolume(routine.websiteSlider / 100);
+		}
+		
+		// Show notification
+		var resultDiv = document.getElementById('calculator-result');
+		if (resultDiv) {
+			resultDiv.innerHTML = '✓ Applied: ' + routine.description + '<br>' +
+				'Frequency: ' + routine.freq + ' Hz<br>' +
+				'Website Slider: ' + routine.websiteSlider + '%<br>' +
+				'Target: ' + routine.microteslas + ' μT';
+		}
+	}
+};
+
+// Default Presets (saved in code)
+var DefaultPresets = [
+	{
+		id: 'default-brain',
+		name: 'Brain/Wit',
+		deviceType: 'mobile',
+		freq: 40,
+		websiteVolume: 47,
+		ampVolume: 50,
+		pcVolume: 50,
+		androidClicks: 0,
+		microteslas: 55,
+		isDefault: true
+	},
+	{
+		id: 'default-soccer',
+		name: 'Soccer Nerves',
+		deviceType: 'mobile',
+		freq: 1000,
+		websiteVolume: 67,
+		ampVolume: 50,
+		pcVolume: 50,
+		androidClicks: 0,
+		microteslas: 110,
+		isDefault: true
+	},
+	{
+		id: 'default-safe-height',
+		name: 'Safe Height',
+		deviceType: 'mobile',
+		freq: 28,
+		websiteVolume: 95,
+		ampVolume: 50,
+		pcVolume: 50,
+		androidClicks: 0,
+		microteslas: 6726,
+		isDefault: true
+	},
+	{
+		id: 'default-max-height',
+		name: 'Max Height',
+		deviceType: 'mobile',
+		freq: 28,
+		websiteVolume: 100,
+		ampVolume: 50,
+		pcVolume: 50,
+		androidClicks: 0,
+		microteslas: 7185,
+		isDefault: true
+	}
+];
+
+// Presets Management
+var PresetsManager = {
+	storageKey: 'toneGeneratorPresets',
+	defaultPresetsKey: 'toneGeneratorDefaultPresets',
+	
+	getDefaultPresets: function() {
+		return DefaultPresets;
+	},
+	
+	getUserPresets: function() {
+		var stored = localStorage.getItem(this.storageKey);
+		return stored ? JSON.parse(stored) : [];
+	},
+	
+	getAllPresets: function() {
+		var defaults = this.getDefaultPresets();
+		var userPresets = this.getUserPresets();
+		return defaults.concat(userPresets);
+	},
+	
+	getPresets: function() {
+		// Return combined default + user presets
+		return this.getAllPresets();
+	},
+	
+	addPreset: function(preset) {
+		var userPresets = this.getUserPresets();
+		preset.id = Date.now().toString();
+		preset.isDefault = false;
+		userPresets.push(preset);
+		this.saveUserPresets(userPresets);
+		this.renderPresets();
+	},
+	
+	saveUserPresets: function(presets) {
+		localStorage.setItem(this.storageKey, JSON.stringify(presets));
+	},
+	
+	deletePreset: function(id) {
+		// Only allow deletion of user presets, not defaults
+		var userPresets = this.getUserPresets();
+		userPresets = userPresets.filter(function(p) { return p.id !== id; });
+		this.saveUserPresets(userPresets);
+		this.renderPresets();
+	},
+	
+	loadPreset: function(preset) {
+		if (preset.freq) {
+			window.setFreq(preset.freq);
+		}
+		if (preset.websiteVolume !== undefined) {
+			window.setVolume(preset.websiteVolume / 100);
+		}
+		// Note: Other values (amp volume, PC volume, Android clicks, micro teslas) 
+		// are for reference only and cannot be automatically applied
+	},
+	
+	exportPresetsAsCode: function() {
+		var userPresets = this.getUserPresets();
+		if (userPresets.length === 0) {
+			alert('No user presets to export.');
+			return;
+		}
+		
+		var code = '// User Presets - Add this to DefaultPresets array in index.html\n';
+		code += 'var UserPresets = ' + JSON.stringify(userPresets, null, 2) + ';\n\n';
+		code += '// Then merge with DefaultPresets:\n';
+		code += '// var DefaultPresets = DefaultPresets.concat(UserPresets);\n';
+		
+		// Create download link
+		var blob = new Blob([code], { type: 'text/javascript' });
+		var url = URL.createObjectURL(blob);
+		var a = document.createElement('a');
+		a.href = url;
+		a.download = 'user-presets.js';
+		a.click();
+		URL.revokeObjectURL(url);
+	},
+	
+	importPresetsFromCode: function(code) {
+		try {
+			// Try to parse the code
+			var presets = [];
+			// Look for array or object in the code
+			var match = code.match(/\[[\s\S]*\]/);
+			if (match) {
+				presets = JSON.parse(match[0]);
+			} else {
+				// Try to eval if it's a variable assignment
+				var context = { DefaultPresets: [], UserPresets: [] };
+				var func = new Function('DefaultPresets', 'UserPresets', code);
+				func(context.DefaultPresets, context.UserPresets);
+				presets = context.UserPresets || context.DefaultPresets || [];
+			}
+			
+			if (Array.isArray(presets) && presets.length > 0) {
+				// Merge with existing user presets
+				var existing = this.getUserPresets();
+				var existingIds = existing.map(function(p) { return p.id; });
+				presets.forEach(function(p) {
+					if (!existingIds.includes(p.id)) {
+						p.isDefault = false;
+						existing.push(p);
+					}
+				});
+				this.saveUserPresets(existing);
+				this.renderPresets();
+				alert('Successfully imported ' + presets.length + ' preset(s).');
+			} else {
+				alert('No valid presets found in the code.');
+			}
+		} catch (e) {
+			alert('Error importing presets: ' + e.message);
+		}
+	},
+	
+	renderPresets: function() {
+		var defaults = this.getDefaultPresets();
+		var userPresets = this.getUserPresets();
+		var list = document.getElementById('presets-list');
+		list.innerHTML = '';
+		
+		if (defaults.length === 0 && userPresets.length === 0) {
+			list.innerHTML = '<p style="color: #8e420b; font-style: italic;">No presets saved yet.</p>';
+			return;
+		}
+		
+		// Render default presets first
+		if (defaults.length > 0) {
+			var defaultHeader = document.createElement('div');
+			defaultHeader.style.cssText = 'font-weight: 600; color: #7a3400; margin-top: 10px; margin-bottom: 5px; font-size: 14px;';
+			defaultHeader.textContent = 'Default Presets (Built-in)';
+			list.appendChild(defaultHeader);
+			
+			defaults.forEach(function(preset) {
+				PresetsManager.renderPresetItem(preset, list, true);
+			});
+		}
+		
+		// Render user presets
+		if (userPresets.length > 0) {
+			var userHeader = document.createElement('div');
+			userHeader.style.cssText = 'font-weight: 600; color: #7a3400; margin-top: 15px; margin-bottom: 5px; font-size: 14px;';
+			userHeader.textContent = 'Your Presets';
+			list.appendChild(userHeader);
+			
+			userPresets.forEach(function(preset) {
+				PresetsManager.renderPresetItem(preset, list, false);
+			});
+		}
+	},
+	
+	renderPresetItem: function(preset, list, isDefault) {
+			var presetDiv = document.createElement('div');
+			presetDiv.className = 'preset-item';
+			
+			var name = document.createElement('div');
+			name.className = 'preset-name';
+			name.textContent = preset.name || 'Unnamed Preset';
+			
+			var details = document.createElement('div');
+			details.className = 'preset-details';
+			var detailsText = [];
+			if (preset.deviceType) detailsText.push('Device: ' + (preset.deviceType === 'mobile' ? 'Mobile' : 'PC'));
+			if (preset.freq) detailsText.push(preset.freq.toFixed(2) + ' Hz');
+			if (preset.websiteVolume !== undefined) detailsText.push('Web: ' + preset.websiteVolume + '%');
+			if (preset.ampVolume !== undefined) detailsText.push('Amp: ' + preset.ampVolume + '%');
+			if (preset.pcVolume !== undefined) detailsText.push('PC: ' + preset.pcVolume + '%');
+			if (preset.androidClicks !== undefined) detailsText.push('Android: ' + preset.androidClicks + ' clicks');
+			if (preset.microteslas !== undefined) detailsText.push(preset.microteslas + ' μT');
+			details.textContent = detailsText.join(' | ');
+			
+			var buttons = document.createElement('div');
+			buttons.className = 'preset-buttons';
+			
+			var loadBtn = document.createElement('button');
+			loadBtn.className = 'small-button';
+			loadBtn.textContent = 'Load';
+			loadBtn.onclick = function() { PresetsManager.loadPreset(preset); };
+			
+			var deleteBtn = null;
+			if (!isDefault) {
+				deleteBtn = document.createElement('button');
+				deleteBtn.className = 'small-button';
+				deleteBtn.textContent = 'Delete';
+				deleteBtn.onclick = function() { 
+					if (confirm('Delete preset "' + (preset.name || 'Unnamed') + '"?')) {
+						PresetsManager.deletePreset(preset.id);
+					}
+				};
+			}
+			
+			buttons.appendChild(loadBtn);
+			if (deleteBtn) {
+				buttons.appendChild(deleteBtn);
+			}
+			
+			// Mark default presets visually
+			if (isDefault) {
+				presetDiv.style.borderLeft = '3px solid #874e23';
+			}
+			
+			presetDiv.appendChild(name);
+			presetDiv.appendChild(details);
+			presetDiv.appendChild(buttons);
+			
+			list.appendChild(presetDiv);
+	},
+			
+			presetDiv.appendChild(name);
+			presetDiv.appendChild(details);
+			presetDiv.appendChild(buttons);
+			
+			list.appendChild(presetDiv);
+		});
+	},
+	
+	showCreateDialog: function() {
+		var dialog = document.getElementById('preset-dialog');
+		var nameInput = document.getElementById('preset-name-input');
+		var freqInput = document.getElementById('preset-freq-input');
+		var websiteVolInput = document.getElementById('preset-website-volume-input');
+		var ampVolInput = document.getElementById('preset-amp-volume-input');
+		var pcVolInput = document.getElementById('preset-pc-volume-input');
+		var androidClicksInput = document.getElementById('preset-android-clicks-input');
+		var microteslasInput = document.getElementById('preset-microteslas-input');
+		
+		// Auto-fill current values
+		freqInput.value = window.sliderFreq || 440;
+		websiteVolInput.value = Math.round(window.volume * 100) || 50;
+		ampVolInput.value = 50;
+		pcVolInput.value = 50;
+		androidClicksInput.value = 0;
+		microteslasInput.value = 0;
+		
+		// Setup calculator button for website volume
+		var calcBtn = document.getElementById('calc-website-volume-btn');
+		if (calcBtn) {
+			calcBtn.onclick = function() {
+				var targetMicroteslas = parseFloat(microteslasInput.value);
+				if (!targetMicroteslas || targetMicroteslas <= 0) {
+					alert('Please enter a target micro teslas value first.');
+					microteslasInput.focus();
+					return;
+				}
+				
+				// Get device type from selector
+				var deviceTypeSelect = document.getElementById('preset-device-type-input');
+				var deviceType = deviceTypeSelect ? deviceTypeSelect.value : 'mobile';
+				var sliderPercent = MicroTeslaCalculator.calculateWebsiteSlider(deviceType, targetMicroteslas);
+				
+				if (sliderPercent !== null) {
+					websiteVolInput.value = Math.round(sliderPercent);
+					alert('Calculated website slider: ' + sliderPercent.toFixed(1) + '%');
+				} else {
+					alert('Could not calculate. Please check your inputs.');
+				}
+			};
+		}
+		
+		dialog.style.display = 'block';
+		nameInput.focus();
+	},
+	
+	hideCreateDialog: function() {
+		document.getElementById('preset-dialog').style.display = 'none';
+	},
+	
+	savePresetFromDialog: function() {
+		var nameInput = document.getElementById('preset-name-input');
+		var freqInput = document.getElementById('preset-freq-input');
+		var websiteVolInput = document.getElementById('preset-website-volume-input');
+		var ampVolInput = document.getElementById('preset-amp-volume-input');
+		var pcVolInput = document.getElementById('preset-pc-volume-input');
+		var androidClicksInput = document.getElementById('preset-android-clicks-input');
+		var microteslasInput = document.getElementById('preset-microteslas-input');
+		
+		var name = nameInput.value.trim();
+		if (!name) {
+			alert('Please enter a preset name');
+			return;
+		}
+		
+		var deviceTypeSelect = document.getElementById('preset-device-type-input');
+		var preset = {
+			name: name,
+			deviceType: deviceTypeSelect ? deviceTypeSelect.value : 'mobile',
+			freq: parseFloat(freqInput.value) || window.sliderFreq,
+			websiteVolume: parseInt(websiteVolInput.value) || Math.round(window.volume * 100),
+			ampVolume: parseInt(ampVolInput.value) || 50,
+			pcVolume: parseInt(pcVolInput.value) || 50,
+			androidClicks: parseInt(androidClicksInput.value) || 0,
+			microteslas: parseFloat(microteslasInput.value) || 0
+		};
+		
+		this.addPreset(preset);
+		this.hideCreateDialog();
+		
+		// Clear inputs
+		nameInput.value = '';
+		ampVolInput.value = 50;
+		pcVolInput.value = 50;
+		androidClicksInput.value = 0;
+		microteslasInput.value = 0;
+	}
+};
+
+// Initialize presets when DOM is ready
+document.addEventListener('DOMContentLoaded', function() {
+	var createBtn = document.getElementById('create-preset-button');
+	var saveBtn = document.getElementById('preset-save-button');
+	var cancelBtn = document.getElementById('preset-cancel-button');
+	var dialog = document.getElementById('preset-dialog');
+	
+	if (createBtn) {
+		createBtn.onclick = function() {
+			PresetsManager.showCreateDialog();
+		};
+	}
+	
+	if (saveBtn) {
+		saveBtn.onclick = function() {
+			PresetsManager.savePresetFromDialog();
+		};
+	}
+	
+	if (cancelBtn) {
+		cancelBtn.onclick = function() {
+			PresetsManager.hideCreateDialog();
+		};
+	}
+	
+	// Close dialog on outside click
+	if (dialog) {
+		dialog.onclick = function(e) {
+			if (e.target === dialog) {
+				PresetsManager.hideCreateDialog();
+			}
+		};
+		
+		// Keyboard support for dialog
+		var nameInput = document.getElementById('preset-name-input');
+		if (nameInput) {
+			nameInput.addEventListener('keydown', function(e) {
+				if (e.key === 'Enter') {
+					e.preventDefault();
+					PresetsManager.savePresetFromDialog();
+				} else if (e.key === 'Escape') {
+					PresetsManager.hideCreateDialog();
+				}
+			});
+		}
+	}
+	
+	// Render presets on load
+	setTimeout(function() {
+		PresetsManager.renderPresets();
+	}, 100);
+	
+	// Toggle calculator visibility
+	var toggleCalcBtn = document.getElementById('toggle-calculator-btn');
+	var calcSection = document.getElementById('calculator-section');
+	if (toggleCalcBtn && calcSection) {
+		var isCalculatorVisible = localStorage.getItem('calculatorVisible') === 'true';
+		if (isCalculatorVisible) {
+			calcSection.style.display = 'block';
+			toggleCalcBtn.textContent = 'Hide Auto Calculator';
+		}
+		
+		toggleCalcBtn.onclick = function() {
+			var isVisible = calcSection.style.display !== 'none';
+			if (isVisible) {
+				calcSection.style.display = 'none';
+				toggleCalcBtn.textContent = 'Show Auto Calculator';
+				localStorage.setItem('calculatorVisible', 'false');
+			} else {
+				calcSection.style.display = 'block';
+				toggleCalcBtn.textContent = 'Hide Auto Calculator';
+				localStorage.setItem('calculatorVisible', 'true');
+			}
+		};
+	}
+	
+	// Calculator functionality
+	var calculateBtn = document.getElementById('calculate-button');
+	if (calculateBtn) {
+		calculateBtn.onclick = function() {
+			var deviceType = document.getElementById('device-type-select').value;
+			var targetMicroteslas = parseFloat(document.getElementById('target-microteslas-input').value);
+			var resultDiv = document.getElementById('calculator-result');
+			
+			if (!targetMicroteslas || targetMicroteslas <= 0) {
+				resultDiv.innerHTML = '⚠ Please enter a valid target micro teslas value.';
+				resultDiv.style.color = '#a3523f';
+				return;
+			}
+			
+			var sliderPercent = MicroTeslaCalculator.calculateWebsiteSlider(deviceType, targetMicroteslas);
+			
+			if (sliderPercent === null) {
+				resultDiv.innerHTML = '⚠ Calculation error. Please check your inputs.';
+				resultDiv.style.color = '#a3523f';
+				return;
+			}
+			
+			var deviceName = deviceType === 'mobile' ? 'Mobile (Android 100%)' : 'PC (63% system)';
+			resultDiv.innerHTML = 
+				'<strong>Calculated Website Slider: ' + sliderPercent.toFixed(1) + '%</strong><br>' +
+				'Device: ' + deviceName + '<br>' +
+				'Target: ' + targetMicroteslas + ' μT<br>' +
+				'<button class="small-button" onclick="window.setVolume(' + (sliderPercent / 100) + ')" style="margin-top: 8px;">Apply to Website Slider</button>';
+			resultDiv.style.color = '#7a3400';
+		};
+	}
+	
+	// Quick routine buttons
+	var routineButtons = document.querySelectorAll('.routine-btn');
+	routineButtons.forEach(function(btn) {
+		btn.onclick = function() {
+			var routineName = this.getAttribute('data-routine');
+			MicroTeslaCalculator.applyRoutine(routineName);
+		};
+	});
+	
+	// Export presets button
+	var exportBtn = document.getElementById('export-presets-button');
+	if (exportBtn) {
+		exportBtn.onclick = function() {
+			PresetsManager.exportPresetsAsCode();
+		};
+	}
+	
+	// Import presets button
+	var importBtn = document.getElementById('import-presets-button');
+	if (importBtn) {
+		importBtn.onclick = function() {
+			var code = prompt('Paste the preset code here (from user-presets.js or DefaultPresets array):');
+			if (code && code.trim()) {
+				PresetsManager.importPresetsFromCode(code);
+			}
+		};
+	}
+});
+</script>
+
+<script>
+if (getCookie("ab-otgbanad") !== "y") { //user removed ads (does not include adblock)
+	window.AD_PLACEMENT = 2;
+	window.AD_FREE = false;
+	document.write('<script async src="//pagead2.googlesyndication.com/pagead/js/adsbygoogle.js"><\/script>');
+} else window.AD_FREE = true;
+</script>
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-1DSZFLKR1X"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+  gtag('config', 'G-1DSZFLKR1X', { cookie_domain: 'www.szynalski.com', cookie_path: '/tone-generator' });
+/*!
+     * jQuery UI Touch Punch 0.2.3
+     * Copyright 2011–2014, Dave Furfero
+     * Dual licensed under the MIT or GPL Version 2 licenses.
+     */
+    !function(a){function f(a,b){if(!(a.originalEvent.touches.length>1)){a.preventDefault();var c=a.originalEvent.changedTouches[0],d=document.createEvent("MouseEvents");d.initMouseEvent(b,!0,!0,window,1,c.screenX,c.screenY,c.clientX,c.clientY,!1,!1,!1,!1,0,null),a.target.dispatchEvent(d)}}if(a.support.touch="ontouchend"in document,a.support.touch){var e,b=a.ui.mouse.prototype,c=b._mouseInit,d=b._mouseDestroy;b._touchStart=function(a){var b=this;!e&&b._mouseCapture(a.originalEvent.changedTouches[0])&&(e=!0,b._touchMoved=!1,f(a,"mouseover"),f(a,"mousemove"),f(a,"mousedown"))},b._touchMove=function(a){e&&(this._touchMoved=!0,f(a,"mousemove"))},b._touchEnd=function(a){e&&(f(a,"mouseup"),f(a,"mouseout"),this._touchMoved||f(a,"click"),e=!1)},b._mouseInit=function(){var b=this;b.element.bind({touchstart:a.proxy(b,"_touchStart"),touchmove:a.proxy(b,"_touchMove"),touchend:a.proxy(b,"_touchEnd")}),c.call(b)},b._mouseDestroy=function(){var b=this;b.element.unbind({touchstart:a.proxy(b,"_touchStart"),touchmove:a.proxy(b,"_touchMove"),touchend:a.proxy(b,"_touchEnd")}),d.call(b)}}}(jQuery);
+</script>
+</head>
+<body>
+<script>writeCookieMessage("privacy.htm");</script>
+
+<svg xmlns="http://www.w3.org/2000/svg" style="display: none">
+<symbol id="svg-Lspeaker-icon" viewBox="0 0 40 38">	
+<svg version="1.1" xmlns="http://www.w3.org/2000/svg"><g transform="translate(-84.748 -76.596)"><g transform="matrix(-.28222 0 0 .28222 848.8 -82.759)" fill="inherit"><path d="m2645.1 696.21v-131.56l-32.764 33.843h-41.068l0.028 63.916 41.054-0.0201z" fill-rule="evenodd"/><path transform="matrix(.9375 0 0 .9375 -5.8967 -8.2345)" d="m2852 645.99-9.1192 8.916c6.4339 6.5121 10.396 15.473 10.396 25.402 0 10.415-4.3627 19.759-11.361 26.334l9.125 8.9199c9.276-8.9155 15.072-21.426 15.072-35.254 0-13.348-5.3964-25.473-14.113-34.318z" fill-rule="evenodd"/><path transform="matrix(.9375 0 0 .9375 -5.8967 -8.2345)" d="m2872 626.46-9.1211 8.916c11.358 11.549 18.361 27.396 18.361 44.926 0 18.014-7.3974 34.248-19.314 45.869l9.127 8.9199c14.198-13.957 23.023-33.36 23.023-54.789 0-20.947-8.4354-39.96-22.076-53.842z" color="#000000" color-rendering="auto" dominant-baseline="auto" image-rendering="auto" shape-rendering="auto" solid-color="#000000"/></g></g></svg>
+</symbol>
+<symbol id="svg-Rspeaker-icon" viewBox="0 0 40 38">
+	<use xlink:href="#svg-Lspeaker-icon" width="40" transform="translate(40 0) scale(-1,1)"/>
+</symbol>
+<symbol id="svg-balance-icon" viewBox="0 0 92 38">
+	<use xlink:href="#svg-Lspeaker-icon" width="40"/>
+	<use xlink:href="#svg-Rspeaker-icon" width="40" transform="translate(48 0)"/>
+</symbol>
+</svg>
+
+<div id=wrapper>
+<h1>Online Tone Generator</h1>
+
+<div id="generator-ui">
+
+<button class=button id="play-button" title="Play/Stop [Space]" tabindex=10>Play</button>
+<span id="play-indicator" class="stopped"></span>
+
+<a class=support-link href="#support">Support this site &raquo;</a>
+
+<div id="slider" style="margin: 40px 0px 18px 0px"></div>
+<div class="controls">
+    <span class=control-group>
+        <label id="volume-slider-label"></label>
+        <span id="volume-slider"></span>
+        <span id="volume-readout" style="margin-right: 20px"></span>
+		<button id="balance-control" title="balance" tabindex=40><svg viewBox="0 0 92 38"><use id="balance-control-L-speaker-icon" xlink:href="#svg-Lspeaker-icon" width="40"/><use id="balance-control-R-speaker-icon" xlink:href="#svg-Rspeaker-icon" width="40" transform="translate(48 0)"/></svg></button>
+        <span class=separator style="margin-right: 55px"></span>
+    </span>
+    <span class=control-group>
+        <button class="small-button" id="octave-down-button" title="− 1 octave (frequency ÷ 2)" style="margin-right: 10px"  tabindex=60>×½</button>
+        <button class="freq-button" id="freq-down-button" title="– 1 Hz [Shift+←]" tabindex=70></button>
+        <span id="freq-readout" tabindex=80></span>
+        <button class="freq-button" id="freq-up-button" title="+ 1 Hz [Shift+→]" tabindex=90></button>
+        <button class="small-button" id="octave-up-button" title="+ 1 octave (frequency × 2)" style="margin-left: 10px;" tabindex=100>×2</button>
+		<span class=separator></span>
+    </span>
+	<span class=control-group>
+        <label id="note-selector-label"></label>
+		<button name="note-selector" id="note-selector" title="note selector" style="width: 110px;" tabindex=110></button>
+	</span>
+	<span class=control-group style="margin-right: 0px">
+		<button name="wave-selector" id="wave-selector" title="wave type selector" style="width: 31.5px; margin-right: 20px; padding-left: 5px;" tabindex=300></button>
+		<button name="get-link" id="get-link" tabindex=310>Copy link</button>
+	</span>	
+</div>
+
+</div>
+
+<div id="presets-section">
+	<h2>Presets</h2>
+	
+	<div id="calculator-toggle" style="margin-bottom: 15px;">
+		<button class="button" id="toggle-calculator-btn" style="font-size: 12px; padding: 6px 12px;">Show Auto Calculator</button>
+	</div>
+	
+	<div id="calculator-section" style="display: none;">
+		<h3>Auto Calculator</h3>
+		<div class="calculator-form">
+			<label>Device Type:</label>
+			<select id="device-type-select">
+				<option value="mobile">Mobile (Android 100% volume)</option>
+				<option value="pc">PC (63% system volume)</option>
+			</select>
+			
+			<label>Target Micro Teslas (μT):</label>
+			<input type="number" id="target-microteslas-input" step="0.01" min="0" placeholder="e.g., 55">
+			
+			<button class="button" id="calculate-button">Calculate Website Slider %</button>
+			<div id="calculator-result" style="margin-top: 10px; font-weight: 600; color: #7a3400;"></div>
+		</div>
+		
+		<div class="quick-routines">
+			<h4>Quick Routines (Mobile)</h4>
+			<div class="routine-buttons">
+				<button class="small-button routine-btn" data-routine="brain">Brain/Wit (40 Hz, 47%)</button>
+				<button class="small-button routine-btn" data-routine="soccer">Soccer Nerves (1000 Hz, 67%)</button>
+				<button class="small-button routine-btn" data-routine="safe-height">Safe Height (28 Hz, 100%)</button>
+				<button class="small-button routine-btn" data-routine="max-height">Max Height (28 Hz, 100%)</button>
+			</div>
+		</div>
+	</div>
+	
+	<div id="presets-controls">
+		<button class="button" id="create-preset-button" tabindex=320>Create Preset</button>
+		<button class="button" id="export-presets-button" tabindex=321 style="font-size: 12px; padding: 6px 12px; margin-left: 8px;">Export to Code</button>
+		<button class="button" id="import-presets-button" tabindex=322 style="font-size: 12px; padding: 6px 12px; margin-left: 8px;">Import from Code</button>
+	</div>
+	<div id="presets-list"></div>
+	<div id="preset-dialog" style="display: none;">
+		<div class="preset-dialog-content">
+			<h3>Create Preset</h3>
+			<div class="preset-form">
+				<label>Preset Name:</label>
+				<input type="text" id="preset-name-input" placeholder="Enter preset name" maxlength="50">
+				
+				<label>Device Type:</label>
+				<select id="preset-device-type-input">
+					<option value="mobile">Mobile (Android 100% volume)</option>
+					<option value="pc">PC (63% system volume)</option>
+				</select>
+				
+				<label>Frequency (Hz):</label>
+				<input type="number" id="preset-freq-input" step="0.01" min="1" max="20154">
+				
+				<label>Website Volume (%):</label>
+				<div style="display: flex; gap: 5px; align-items: center;">
+					<input type="number" id="preset-website-volume-input" min="1" max="100" value="50" style="flex: 1;">
+					<button type="button" class="small-button" id="calc-website-volume-btn" title="Calculate from Micro Teslas">Calc</button>
+				</div>
+				
+				<label>Amp Volume (%):</label>
+				<input type="number" id="preset-amp-volume-input" min="1" max="100" value="50">
+				
+				<label>PC Volume (%):</label>
+				<input type="number" id="preset-pc-volume-input" min="1" max="100" value="50">
+				
+				<label>Android Volume Clicks Down:</label>
+				<input type="number" id="preset-android-clicks-input" min="0" max="100" value="0">
+				
+				<label>Micro Teslas Used:</label>
+				<input type="number" id="preset-microteslas-input" step="0.01" min="0" value="0">
+			</div>
+			<div class="preset-dialog-buttons">
+				<button class="button" id="preset-save-button">Save</button>
+				<button class="button" id="preset-cancel-button">Cancel</button>
+			</div>
+		</div>
+	</div>
+</div>
+
+<div id="otgbanad-2" class="banad" style="display: none">
+<div class="ad-banner-blocker"></div>
+<div class="ad-banner-remove-msg">
+<i>Poof!</i> You won’t see this ad (either now or on your subsequent visits). Please consider
+<a href="#support">supporting the generator directly</a>. <i>Thanks!</i>
+</div>
+<div class="ad-banner-adblock-msg">
+<i>Hmmm...</i> An ad should be here, but it didn’t load. Please consider
+<a href="#support">supporting this site directly</a>. <i>Thanks!</i>
+</div>
+<ins style="display:block" data-ad-client="ca-pub-9138061171980132"
+	 data-ad-slot="9335466564" data-ad-format="horizontal"></ins> <!--must be horizontal, else adsense will sometimes load a huge squarish unit on desktop-->
+<div class="ad-remove-ui">
+<a class="ad-remove-link" href="javascript:;" onclick="adUnits.getUnit('otgbanad-2').remove(90)"><span class=ui-link-icon>⌧</span> <span class=ui-link-label>Remove ad and don’t show it again</span></a>
+</div>
+</div>
+<script>
+var container = document.getElementById("otgbanad-2");
+if (AD_FREE || AD_PLACEMENT != 2) {
+	//container.style.height = "auto";
+	//container.querySelector(".ad-remove-ui").style.display = "none";
+} else {
+	container.style.display = "block";
+	var ins = container.querySelector("ins");
+	ins.className = "adsbygoogle example";
+	adUnits.add("otgbanad-2");
+	(adsbygoogle = window.adsbygoogle || []).push({});
+}
+</script>
+
+<div class=warning>
+<strong>You can damage your hearing or your speakers if you play tones at extreme volumes.</strong>
+People can’t hear sounds &lt; 20 Hz and &gt; 10,000 Hz very well. If you turn up the volume on your device to compensate,
+you could expose yourself to harmful sound levels and your speakers to harmful currents.
+To be safe, note the volume level that allows you to listen to a 1,000 Hz tone without discomfort and do not stray too far
+above this level, even if you can’t hear much – especially in the high range, where your hearing is the most fragile.
+</div>
+
+<h2>Instructions</h2>
+<p>
+To play a constant tone, click <span class=button-name>Play</span> or press <kbd>Space</kbd>.
+</p><p>
+To change the frequency, drag the slider or press <kbd>←</kbd> <kbd>→</kbd> (arrow keys).
+To adjust the frequency by 1 Hz, use the
+<span class=image-freq-down></span> <span class=image-freq-up></span>
+buttons or press <kbd>Shift + ←</kbd> and <kbd>Shift + →</kbd>.
+To adjust the frequency by 0.01 Hz, press <kbd>Ctrl + ←</kbd> and <kbd>Ctrl + →</kbd>;
+to adjust it by 0.001 Hz, press <kbd>Ctrl + Shift + ←</kbd> and <kbd>Ctrl + Shift+ →</kbd>
+To halve/double the frequency (go down/up one octave), click
+<span class=button-name>×½</span> and <span class=button-name>×2</span>.
+</p><p>
+To change the wave type from a sine wave (pure tone) to a square/triangle/sawtooth wave, click the
+<span class=button-name><span class=image-sine></span></span>
+button.
+</p><p>
+You can mix tones by opening the Online Tone Generator
+in several browser tabs.
+</p>
+
+<h2>What can I use this tone generator for?</h2>
+<p>
+Tuning instruments, science experiments (<i>what’s the resonant frequency of this wineglass?</i>), testing audio equipment
+(<i>how low does my subwoofer go?</i>), testing your hearing (<i>what’s the highest frequency you can hear? are there frequencies
+you can hear in only one ear?</i>).
+</p><p>
+<b>Tinnitus frequency matching.</b>
+If you have pure-tone <a href="https://blog.szynalski.com/2010/12/24/tinnitus-tips/">tinnitus</a>, this online frequency generator can help you determine its frequency.
+Knowing your tinnitus frequency can enable you to better target masking sounds and 
+<a href="https://plasticity.szynalski.com/">frequency discrimination training</a>.
+When you find a frequency that seems to match your tinnitus, make sure you check frequencies
+one octave higher (frequency × 2) and one octave lower (frequency × ½), as it is easy to confuse
+tones that are one octave apart.
+</p><p>
+<b>Alzheimer’s disease.</b>
+Some scientists from MIT are seriously investigating the possibility that <a href="#40" onclick="setTonePropertiesFromHash('40,v1,b0,sine')">40 Hz tones</a>
+may reverse some of the molecular changes in the brains of Alzheimer’s patients.
+Initial studies on transgenic mice showed promising results, but (as is often the case) early-stage human trials paint
+a much murkier picture. Further studies are underway. Here’s a
+<a href="//blog.szynalski.com/2018/03/40-hz-tone-alzheimers/">summary of the research so far</a> and a report from a user who
+tried 40 Hz therapy on his wife.
+(<i>Note that this tone generator is not a medical device – I don’t guarantee anything!</i>)
+</p>
+
+<h2>Comments</h2>
+<p>
+You can leave comments <a href="https://blog.szynalski.com/2012/08/29/online-tone-generator/">here</a>.
+</p>
+
+<h2 id="support">Support this site</h2>
+<p>
+If you use the Online Tone Generator and find it helpful, please support it with a little bit of money.
+Here’s the deal:
+My goal is to keep maintaining this site to make sure it stays compatible with
+current browser versions. Unfortunately, this takes a non-trivial amount of time (for example, figuring
+out an obscure browser bug can take many hours of work), which is a problem because
+I have to make a living. Donations from awesome, good-looking users like you buy me time to keep things running.
+</p><p>
+So if you think this tone generator is worth it, please support it with some money to help keep it online.
+The amount is entirely up to you – I only ask for what <em>you</em> consider fair price for the value you’re getting.
+<em>Thanks!</em>
+</p>
+
+<form action="https://www.paypal.com/cgi-bin/webscr" method="post" class="support">
+<input type="hidden" name="cmd" value="_donations">
+<input type="hidden" name="business" value="4S47JETKM9C72">
+<input type="hidden" name="lc" value="US">
+<input type="hidden" name="item_name" value="Online Tone Generator">
+<input type="hidden" name="item_number" value="Online Tone Generator Support">
+<input type="hidden" name="no_shipping" value="1">
+<input type="hidden" name="enable_recurring_donations" value="2">
+<input type="hidden" name="currency_code" value="USD"> 
+<div style="display: inline-block">
+	<button class="donate" type="submit" name="submit">Support this site now &raquo;</button>
+	<div class="donate-tip">PayPal / credit card</div>
+</div>
+</form>
+
+<div id=footer>
+Created by <a href="//blog.szynalski.com/about/">Tomasz P. Szynalski</a>
+<span class=sep style="margin: 0 3px; color: #ddd">|</span>
+<a href="//blog.szynalski.com/2012/08/29/online-tone-generator/">Comments</a>
+<span class=sep style="margin: 0 3px; color: #ddd">|</span>
+<a href="privacy.htm">Privacy policy</a>
+</div>
+
+</div>
+</body>
+</html>
