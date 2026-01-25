@@ -12,9 +12,9 @@
 	</script>
 	<title>Online Tone Generator - generate pure tones of any frequency</title>
 	<link href='https://fonts.googleapis.com/css?family=Open+Sans:400,400italic,600' rel='stylesheet' type='text/css'>
-	<link rel="stylesheet" href="//ajax.googleapis.com/ajax/libs/jqueryui/1.11.4/themes/smoothness/jquery-ui.css">
-	<script src="//ajax.googleapis.com/ajax/libs/jquery/1.12.0/jquery.min.js"></script>
-	<script src="//ajax.googleapis.com/ajax/libs/jqueryui/1.11.4/jquery-ui.min.js"></script>
+	<link rel="stylesheet" href="https://ajax.googleapis.com/ajax/libs/jqueryui/1.11.4/themes/smoothness/jquery-ui.css">
+	<script src="https://ajax.googleapis.com/ajax/libs/jquery/1.12.0/jquery.min.js"></script>
+	<script src="https://ajax.googleapis.com/ajax/libs/jqueryui/1.11.4/jquery-ui.min.js"></script>
 	<link rel="stylesheet" href="tone-generator.mini.css?20">
 	<style>
 		#presets-section {
@@ -746,18 +746,40 @@
 				var prefixInput = document.getElementById('phyphox-prefix');
 				if (!codeInput || !prefixInput) return;
 
-				this.code = codeInput.value.trim();
-				this.prefix = prefixInput.value.trim();
+				var rawPrefix = prefixInput.value.trim();
+				var rawCode = codeInput.value.trim();
 
-				if (!this.code) {
-					alert('Please enter the connection code shown in the app.');
-					return;
+				// Intelligent parsing: Check if user typed a full IP in the prefix box
+				// Regex for IP pattern: roughly 4 sets of numbers separated by dots
+				var fullIpMatch = rawPrefix.match(/(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})(:\d+)?/);
+
+				if (fullIpMatch && rawPrefix.length > 12) {
+					// User typed full IP! Use it directly.
+					this.ip = rawPrefix;
+					// Ensure port
+					if (!this.ip.includes(':')) this.ip += ':8080';
+
+					// Update UI to reflect this is a manual override
+					this.code = "MANUAL";
+					localStorage.setItem('phyphoxPrefix', rawPrefix);
+				} else {
+					// Standard Prefix + Code logic
+					if (!rawCode) {
+						alert('Please enter the connection code shown in the app.');
+						return;
+					}
+					this.code = rawCode;
+					this.prefix = rawPrefix;
+
+					// Clean prefix (ensure it ends with dot if it's just a prefix)
+					if (!this.prefix.endsWith('.') && this.prefix.split('.').length === 3) {
+						this.prefix += '.';
+					}
+
+					this.ip = this.prefix + parseInt(this.code, 10) + ':8080';
+					localStorage.setItem('phyphoxCode', this.code);
+					localStorage.setItem('phyphoxPrefix', this.prefix);
 				}
-
-				this.ip = this.prefix + parseInt(this.code, 10) + ':8080';
-
-				localStorage.setItem('phyphoxCode', this.code);
-				localStorage.setItem('phyphoxPrefix', this.prefix);
 
 				this.updateStatus('connecting', 'Connecting to ' + this.ip + '...');
 
@@ -1147,6 +1169,198 @@
 	</script>
 
 	<script>
+		// Fix frequency readout initialization - ensure sliderFreq is set and readout is updated
+		(function() {
+			// Initialize sliderFreq to default value immediately
+			if (typeof window.sliderFreq === 'undefined' || window.sliderFreq === null) {
+				window.sliderFreq = 440;
+			}
+			
+			function ensureFrequencyReadout() {
+				// Check if tone generator is initialized
+				if (typeof window.slider_jq !== 'undefined' && typeof window.freqReadout !== 'undefined') {
+					// Get current slider value and set sliderFreq if not already set
+					if (typeof window.sliderFreq === 'undefined' || window.sliderFreq === null) {
+						try {
+							var sliderValue = window.slider_jq.slider('value');
+							if (typeof sliderPosToFreq === 'function') {
+								window.sliderFreq = sliderPosToFreq(sliderValue);
+							} else {
+								window.sliderFreq = 440; // fallback
+							}
+						} catch(e) {
+							window.sliderFreq = 440;
+						}
+					}
+					// Update the readout
+					if (window.freqReadout && typeof window.freqReadout.update === 'function') {
+						window.freqReadout.update();
+					}
+					// Also ensure tones.current has the frequency
+					if (window.tones && window.tones.current && typeof window.tones.current.setFreq === 'function') {
+						try {
+							window.tones.current.setFreq(window.sliderFreq);
+						} catch(e) {}
+					}
+				}
+			}
+			
+			// Hook into the original init function to ensure sliderFreq is set immediately
+			var originalInit = window.init;
+			if (typeof originalInit === 'function') {
+				window.init = function() {
+					originalInit.apply(this, arguments);
+					// Set sliderFreq immediately after init completes
+					setTimeout(function() {
+						if (typeof window.slider_jq !== 'undefined') {
+							try {
+								var sliderValue = window.slider_jq.slider('value');
+								if (typeof sliderPosToFreq === 'function') {
+									window.sliderFreq = sliderPosToFreq(sliderValue);
+								} else {
+									window.sliderFreq = 440;
+								}
+								// Update readout if available
+								if (window.freqReadout && typeof window.freqReadout.update === 'function') {
+									window.freqReadout.update();
+								}
+								// Also ensure tones.current has the frequency and wave type
+								if (window.tones && window.tones.current) {
+									if (typeof window.tones.current.setFreq === 'function') {
+										window.tones.current.setFreq(window.sliderFreq);
+									}
+									if (typeof window.waveType !== 'undefined' && window.waveType && typeof window.tones.current.setType === 'function') {
+										window.tones.current.setType(window.waveType);
+									}
+								}
+							} catch(e) {
+								window.sliderFreq = 440;
+								if (window.tones && window.tones.current && typeof window.tones.current.setFreq === 'function') {
+									try {
+										window.tones.current.setFreq(440);
+									} catch(e2) {}
+								}
+							}
+						} else {
+							window.sliderFreq = 440;
+							if (window.tones && window.tones.current && typeof window.tones.current.setFreq === 'function') {
+								try {
+									window.tones.current.setFreq(440);
+								} catch(e) {}
+							}
+						}
+					}, 0);
+				};
+			}
+			
+			// Also patch onPlayButtonClick to ensure sliderFreq is set before playing
+			var originalOnPlayButtonClick = window.onPlayButtonClick;
+			if (typeof originalOnPlayButtonClick === 'function') {
+				window.onPlayButtonClick = function() {
+					// Ensure sliderFreq is set before playing
+					if (typeof window.sliderFreq === 'undefined' || window.sliderFreq === null) {
+						if (typeof window.slider_jq !== 'undefined') {
+							try {
+								var sliderValue = window.slider_jq.slider('value');
+								if (typeof sliderPosToFreq === 'function') {
+									window.sliderFreq = sliderPosToFreq(sliderValue);
+								} else {
+									window.sliderFreq = 440;
+								}
+							} catch(e) {
+								window.sliderFreq = 440;
+							}
+						} else {
+							window.sliderFreq = 440;
+						}
+					}
+					
+					// Ensure tones.current has the correct frequency and wave type before playing
+					if (window.tones && window.tones.current) {
+						if (typeof window.sliderFreq !== 'undefined' && window.sliderFreq !== null) {
+							if (typeof window.tones.current.setFreq === 'function') {
+								window.tones.current.setFreq(window.sliderFreq);
+							}
+						}
+						if (typeof window.waveType !== 'undefined' && window.waveType) {
+							if (typeof window.tones.current.setType === 'function') {
+								window.tones.current.setType(window.waveType);
+							}
+						}
+					}
+					
+					// Call original function
+					originalOnPlayButtonClick.apply(this, arguments);
+				};
+			}
+			
+			// Try multiple times to catch initialization
+			setTimeout(ensureFrequencyReadout, 100);
+			setTimeout(ensureFrequencyReadout, 500);
+			setTimeout(ensureFrequencyReadout, 1000);
+			setTimeout(ensureFrequencyReadout, 2000);
+			
+			// Also hook into window load
+			if (document.readyState === 'loading') {
+				document.addEventListener('DOMContentLoaded', function() {
+					setTimeout(ensureFrequencyReadout, 200);
+					setTimeout(ensureFrequencyReadout, 500);
+					setTimeout(ensureFrequencyReadout, 1000);
+				});
+			} else {
+				setTimeout(ensureFrequencyReadout, 200);
+				setTimeout(ensureFrequencyReadout, 500);
+				setTimeout(ensureFrequencyReadout, 1000);
+			}
+			
+			window.addEventListener('load', function() {
+				setTimeout(ensureFrequencyReadout, 300);
+				setTimeout(ensureFrequencyReadout, 800);
+				setTimeout(ensureFrequencyReadout, 1500);
+			});
+			
+			// Also try to set sliderFreq directly if slider exists but init hasn't run yet
+			function trySetSliderFreqDirectly() {
+				if (typeof window.slider_jq !== 'undefined' && (typeof window.sliderFreq === 'undefined' || window.sliderFreq === null)) {
+					try {
+						var sliderValue = window.slider_jq.slider('value');
+						if (typeof sliderPosToFreq === 'function') {
+							window.sliderFreq = sliderPosToFreq(sliderValue);
+							if (window.freqReadout && typeof window.freqReadout.update === 'function') {
+								window.freqReadout.update();
+							}
+							if (window.tones && window.tones.current && typeof window.tones.current.setFreq === 'function') {
+								window.tones.current.setFreq(window.sliderFreq);
+							}
+						} else {
+							window.sliderFreq = 440;
+						}
+					} catch(e) {
+						window.sliderFreq = 440;
+					}
+				}
+			}
+			
+			// Try direct approach multiple times
+			setTimeout(trySetSliderFreqDirectly, 50);
+			setTimeout(trySetSliderFreqDirectly, 200);
+			setTimeout(trySetSliderFreqDirectly, 500);
+			setTimeout(trySetSliderFreqDirectly, 1000);
+			
+			if (document.readyState === 'loading') {
+				document.addEventListener('DOMContentLoaded', trySetSliderFreqDirectly);
+			} else {
+				trySetSliderFreqDirectly();
+			}
+			
+			window.addEventListener('load', function() {
+				setTimeout(trySetSliderFreqDirectly, 100);
+				setTimeout(trySetSliderFreqDirectly, 500);
+			});
+		})();
+	</script>
+
+	<script>
 		if (getCookie("ab-otgbanad") !== "y") { //user removed ads (does not include adblock)
 			window.AD_PLACEMENT = 2;
 			window.AD_FREE = false;
@@ -1452,7 +1666,7 @@
 			Initial studies on transgenic mice showed promising results, but (as is often the case) early-stage human
 			trials paint
 			a much murkier picture. Further studies are underway. Here’s a
-			<a href="//blog.szynalski.com/2018/03/40-hz-tone-alzheimers/">summary of the research so far</a> and a
+			<a href="https://blog.szynalski.com/2018/03/40-hz-tone-alzheimers/">summary of the research so far</a> and a
 			report from a user who
 			tried 40 Hz therapy on his wife.
 			(<i>Note that this tone generator is not a medical device – I don’t guarantee anything!</i>)
@@ -1496,9 +1710,9 @@
 		</form>
 
 		<div id=footer>
-			Created by <a href="//blog.szynalski.com/about/">Tomasz P. Szynalski</a>
-			<span class=sep style="margin: 0 3px; color: #ddd">|</span>
-			<a href="//blog.szynalski.com/2012/08/29/online-tone-generator/">Comments</a>
+		Created by <a href="https://blog.szynalski.com/about/">Tomasz P. Szynalski</a>
+		<span class=sep style="margin: 0 3px; color: #ddd">|</span>
+		<a href="https://blog.szynalski.com/2012/08/29/online-tone-generator/">Comments</a>
 			<span class=sep style="margin: 0 3px; color: #ddd">|</span>
 			<a href="privacy.htm">Privacy policy</a>
 		</div>
