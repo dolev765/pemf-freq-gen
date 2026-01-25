@@ -719,6 +719,8 @@
 			currentMicroteslas: 0,
 			targetMicroteslas: 0,
 			adaptationStep: 0.005,
+			targetReachedTime: null, // Track when target was reached
+			holdDuration: 2000, // Hold target for 2 seconds before stopping
 
 			init: function () {
 				var savedPrefix = localStorage.getItem('phyphoxPrefix');
@@ -861,6 +863,10 @@
 
 			setAutoAdapt: function (val) {
 				this.isAutoAdapt = val;
+				// Reset target reached time when enabling/disabling
+				if (!val) {
+					this.targetReachedTime = null;
+				}
 				var label = document.getElementById('auto-adapt-label');
 				var container = document.getElementById('auto-adapt-container');
 				var checkbox = document.getElementById('auto-adapt-checkbox');
@@ -883,7 +889,31 @@
 				var currentVol = window.volume || 0;
 				var diff = this.targetMicroteslas - this.currentMicroteslas;
 				var deadband = Math.max(2, this.targetMicroteslas * 0.02);
-				if (Math.abs(diff) < deadband) return;
+				
+				// Check if we're within the target deadband
+				if (Math.abs(diff) < deadband) {
+					// Target reached - start or continue the hold timer
+					var now = Date.now();
+					if (this.targetReachedTime === null) {
+						// Just reached target - start the timer
+						this.targetReachedTime = now;
+					} else {
+						// Already at target - check if we've held for 2 seconds
+						var timeAtTarget = now - this.targetReachedTime;
+						if (timeAtTarget >= this.holdDuration) {
+							// Held at target for 2 seconds - stop auto-adapting
+							this.setAutoAdapt(false);
+							return;
+						}
+					}
+					// Still holding at target, don't adjust
+					return;
+				} else {
+					// Not at target - reset the timer and continue adjusting
+					this.targetReachedTime = null;
+				}
+				
+				// Adjust volume to reach target
 				var pGain = 0.00015;
 				var adjustment = diff * pGain;
 				var minAdj = 0.002;
