@@ -26,3 +26,6 @@ build/
 captures/
 .externalNativeBuild/
 .cxx/
+
+# Android project (not needed for GitHub Pages)
+phyphox-android/
