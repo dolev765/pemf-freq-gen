@@ -1235,22 +1235,34 @@
 			context: null,
 			oscL: null,
 			oscR: null,
-			panL: null,
-			panR: null,
 			gainL: null,
 			gainR: null,
+			merger: null,
 			masterGain: null,
 			playing: false,
 			waveType: 'sine',
+			initialized: false,
 
 			init: function() {
-				if (this.context) return;
+				// Always create fresh audio nodes to ensure proper routing
+				if (this.initialized && this.context) {
+					// Just ensure context is ready
+					if (this.context.state === 'suspended') {
+						this.context.resume();
+					}
+					return;
+				}
 				
-				// Use existing context if available
+				// Create or reuse context
 				if (window.tones && window.tones.context) {
 					this.context = window.tones.context;
 				} else {
 					this.context = new (window.AudioContext || window.webkitAudioContext)();
+				}
+
+				// Resume if suspended
+				if (this.context.state === 'suspended') {
+					this.context.resume();
 				}
 
 				// Master gain for volume control
@@ -1258,30 +1270,35 @@
 				this.masterGain.connect(this.context.destination);
 				this.masterGain.gain.value = window.volume || 0.5;
 
-				// LEFT channel: oscillator -> gain -> pan hard left -> master
+				// ChannelMerger: combines 2 mono inputs into stereo output
+				// Input 0 = Left channel, Input 1 = Right channel
+				this.merger = this.context.createChannelMerger(2);
+				this.merger.connect(this.masterGain);
+
+				// LEFT channel gain -> merger input 0 (LEFT speaker)
 				this.gainL = this.context.createGain();
-				this.panL = this.context.createStereoPanner();
-				this.panL.pan.value = -1; // HARD LEFT
-				this.gainL.connect(this.panL);
-				this.panL.connect(this.masterGain);
+				this.gainL.gain.value = 1.0;
+				this.gainL.connect(this.merger, 0, 0); // output 0 -> input 0 (LEFT)
 
-				// RIGHT channel: oscillator -> gain -> pan hard right -> master
+				// RIGHT channel gain -> merger input 1 (RIGHT speaker)
 				this.gainR = this.context.createGain();
-				this.panR = this.context.createStereoPanner();
-				this.panR.pan.value = 1; // HARD RIGHT
-				this.gainR.connect(this.panR);
-				this.panR.connect(this.masterGain);
+				this.gainR.gain.value = 1.0;
+				this.gainR.connect(this.merger, 0, 1); // output 0 -> input 1 (RIGHT)
 
-				console.log('StereoEngine initialized with StereoPanner');
+				this.initialized = true;
+				console.log('StereoEngine initialized with ChannelMerger - L->ch0, R->ch1');
 			},
 
 			play: function() {
 				if (this.playing) return;
 				this.init();
 
-				// Resume context if suspended
-				if (this.context.state === 'suspended') {
-					this.context.resume();
+				// Clean up any existing oscillators
+				if (this.oscL) {
+					try { this.oscL.stop(); this.oscL.disconnect(); } catch(e) {}
+				}
+				if (this.oscR) {
+					try { this.oscR.stop(); this.oscR.disconnect(); } catch(e) {}
 				}
 
 				// Create fresh oscillators
@@ -1294,6 +1311,8 @@
 				this.oscL.frequency.value = window.freqL;
 				this.oscR.frequency.value = window.freqR;
 
+				// Connect: oscL -> gainL -> merger[0] (LEFT)
+				//          oscR -> gainR -> merger[1] (RIGHT)
 				this.oscL.connect(this.gainL);
 				this.oscR.connect(this.gainR);
 
@@ -1301,7 +1320,7 @@
 				this.oscR.start();
 
 				this.playing = true;
-				console.log('StereoEngine playing: L=' + window.freqL + 'Hz, R=' + window.freqR + 'Hz');
+				console.log('StereoEngine PLAYING: LEFT=' + window.freqL + 'Hz, RIGHT=' + window.freqR + 'Hz');
 			},
 
 			stop: function() {
@@ -1309,23 +1328,24 @@
 
 				if (this.oscL) {
 					try { this.oscL.stop(); } catch(e) {}
-					this.oscL.disconnect();
+					try { this.oscL.disconnect(); } catch(e) {}
 					this.oscL = null;
 				}
 				if (this.oscR) {
 					try { this.oscR.stop(); } catch(e) {}
-					this.oscR.disconnect();
+					try { this.oscR.disconnect(); } catch(e) {}
 					this.oscR = null;
 				}
 
 				this.playing = false;
-				console.log('StereoEngine stopped');
+				console.log('StereoEngine STOPPED');
 			},
 
 			setFreqL: function(f) {
 				window.freqL = f;
 				if (this.playing && this.oscL) {
 					this.oscL.frequency.setTargetAtTime(f, this.context.currentTime, 0.02);
+					console.log('LEFT freq set to: ' + f);
 				}
 			},
 
@@ -1333,6 +1353,7 @@
 				window.freqR = f;
 				if (this.playing && this.oscR) {
 					this.oscR.frequency.setTargetAtTime(f, this.context.currentTime, 0.02);
+					console.log('RIGHT freq set to: ' + f);
 				}
 			},
 
@@ -1346,6 +1367,14 @@
 				this.waveType = type;
 				if (this.oscL) this.oscL.type = type;
 				if (this.oscR) this.oscR.type = type;
+				console.log('StereoEngine wave type: ' + type);
+			},
+
+			setVolume: function(v) {
+				if (this.masterGain) {
+					this.masterGain.gain.setTargetAtTime(v, this.context.currentTime, 0.02);
+					console.log('StereoEngine volume: ' + (v * 100).toFixed(0) + '%');
+				}
 			}
 		};
 
