@@ -717,10 +717,13 @@
 			isAutoAdapt: false,
 			fetchInterval: null,
 			currentMicroteslas: 0,
+			peakMicroteslas: 0,
+			peakBuffer: [], // Rolling window for peak detection
+			peakWindowSize: 15, // Approx 1.5-2 seconds at 100-200ms polling
 			targetMicroteslas: 0,
-			adaptationStep: 0.005,
-			targetReachedTime: null, // Track when target was reached
-			holdDuration: 2000, // Hold target for 2 seconds before stopping
+			adaptationStep: 0.002, // Finer control
+			targetReachedTime: null,
+			holdDuration: 2000,
 
 			init: function () {
 				var savedPrefix = localStorage.getItem('phyphoxPrefix');
@@ -751,42 +754,32 @@
 				var rawPrefix = prefixInput.value.trim();
 				var rawCode = codeInput.value.trim();
 
-				// Intelligent parsing: Check if user typed a full IP in the prefix box
-				// Regex for IP pattern: roughly 4 sets of numbers separated by dots
 				var fullIpMatch = rawPrefix.match(/(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})(:\d+)?/);
-
 				if (fullIpMatch && rawPrefix.length > 12) {
-					// User typed full IP! Use it directly.
 					this.ip = rawPrefix;
-					// Ensure port
 					if (!this.ip.includes(':')) this.ip += ':8080';
-
-					// Update UI to reflect this is a manual override
 					this.code = "MANUAL";
 					localStorage.setItem('phyphoxPrefix', rawPrefix);
 				} else {
-					// Standard Prefix + Code logic
 					if (!rawCode) {
 						alert('Please enter the connection code shown in the app.');
 						return;
 					}
 					this.code = rawCode;
 					this.prefix = rawPrefix;
-
-					// Clean prefix (ensure it ends with dot if it's just a prefix)
 					if (!this.prefix.endsWith('.') && this.prefix.split('.').length === 3) {
 						this.prefix += '.';
 					}
-
 					this.ip = this.prefix + parseInt(this.code, 10) + ':8080';
 					localStorage.setItem('phyphoxCode', this.code);
 					localStorage.setItem('phyphoxPrefix', this.prefix);
 				}
 
 				this.updateStatus('connecting', 'Connecting to ' + this.ip + '...');
+				this.peakBuffer = []; // Reset peak detection on connect
 
 				if (this.fetchInterval) clearInterval(this.fetchInterval);
-				this.fetchInterval = setInterval(() => this.fetchData(), 200);
+				this.fetchInterval = setInterval(() => this.fetchData(), 120); // Faster polling for better peak detection
 
 				this.isConnected = true;
 			},
@@ -799,6 +792,7 @@
 				this.isConnected = false;
 				this.updateStatus('disconnected', 'Disconnected');
 				this.currentMicroteslas = 0;
+				this.peakMicroteslas = 0;
 				this.updateDisplay();
 			},
 
@@ -821,7 +815,6 @@
 				if (!baseUrl.endsWith('/')) baseUrl += '/';
 
 				var url = baseUrl + 'get?magnetometer';
-				// Append target if set
 				if (this.targetMicroteslas > 0) {
 					url += '&target=' + this.targetMicroteslas;
 				}
@@ -835,9 +828,20 @@
 								var x = buffer.value[0][buffer.value[0].length - 1] || 0;
 								var y = buffer.value[1][buffer.value[1].length - 1] || 0;
 								var z = buffer.value[2][buffer.value[2].length - 1] || 0;
-								this.currentMicroteslas = Math.sqrt(x * x + y * y + z * z);
+
+								var reading = Math.sqrt(x * x + y * y + z * z);
+								this.currentMicroteslas = reading;
+
+								// Peak detection logic: keep high values in a window
+								this.peakBuffer.push(reading);
+								if (this.peakBuffer.length > this.peakWindowSize) {
+									this.peakBuffer.shift();
+								}
+								this.peakMicroteslas = Math.max(...this.peakBuffer);
+
 								this.updateStatus('connected', 'Connected');
 								this.updateDisplay();
+
 								if (this.isAutoAdapt) {
 									this.doAdaptation();
 								}
@@ -854,6 +858,11 @@
 				if (display) {
 					display.textContent = this.currentMicroteslas.toFixed(1);
 				}
+				// Optional: display peak as well if element exists
+				var peakDisplay = document.getElementById('peak-mt-display');
+				if (peakDisplay) {
+					peakDisplay.textContent = this.peakMicroteslas.toFixed(1);
+				}
 			},
 
 			setTarget: function (val) {
@@ -863,7 +872,6 @@
 
 			setAutoAdapt: function (val) {
 				this.isAutoAdapt = val;
-				// Reset target reached time when enabling/disabling
 				if (!val) {
 					this.targetReachedTime = null;
 				}
@@ -885,46 +893,37 @@
 			},
 
 			doAdaptation: function () {
-				if (!window.tones || !tones.playing) return;
+				if (!window.tones || !tones.playing || this.targetMicroteslas <= 0) return;
+
 				var currentVol = window.volume || 0;
-				var diff = this.targetMicroteslas - this.currentMicroteslas;
-				var deadband = Math.max(2, this.targetMicroteslas * 0.02);
-				
-				// Check if we're within the target deadband
+				var diff = this.targetMicroteslas - this.peakMicroteslas; // Target the PEAK, not current
+				var deadband = Math.max(1.5, this.targetMicroteslas * 0.01); // 1% tolerance
+
 				if (Math.abs(diff) < deadband) {
-					// Target reached - start or continue the hold timer
 					var now = Date.now();
 					if (this.targetReachedTime === null) {
-						// Just reached target - start the timer
 						this.targetReachedTime = now;
-					} else {
-						// Already at target - check if we've held for 2 seconds
-						var timeAtTarget = now - this.targetReachedTime;
-						if (timeAtTarget >= this.holdDuration) {
-							// Held at target for 2 seconds - stop auto-adapting
-							this.setAutoAdapt(false);
-							return;
-						}
+					} else if (now - this.targetReachedTime >= this.holdDuration) {
+						this.setAutoAdapt(false);
+						return;
 					}
-					// Still holding at target, don't adjust
 					return;
 				} else {
-					// Not at target - reset the timer and continue adjusting
 					this.targetReachedTime = null;
 				}
-				
-				// Adjust volume to reach target
-				var pGain = 0.00015;
+
+				// Proportional step adjustment
+				var pGain = 0.0001;
 				var adjustment = diff * pGain;
-				var minAdj = 0.002;
-				if (Math.abs(adjustment) < minAdj) {
-					adjustment = (diff > 0) ? minAdj : -minAdj;
-				}
-				var maxAdj = 0.1;
-				if (adjustment > maxAdj) adjustment = maxAdj;
-				if (adjustment < -maxAdj) adjustment = -maxAdj;
+
+				// Clamp step size for stability
+				var minAdj = 0.0005;
+				if (Math.abs(adjustment) < minAdj) adjustment = (diff > 0) ? minAdj : -minAdj;
+				var maxAdj = 0.02;
+				if (Math.abs(adjustment) > maxAdj) adjustment = (diff > 0) ? maxAdj : -maxAdj;
+
 				var newVol = Math.max(0, Math.min(1, currentVol + adjustment));
-				if (Math.abs(newVol - currentVol) > 0.0005) {
+				if (Math.abs(newVol - currentVol) > 0.0001) {
 					window.setVolume(newVol);
 				}
 			}
@@ -1199,13 +1198,170 @@
 	</script>
 
 	<script>
+		// ========================================================
+		// UNIFIED STEREO ENGINE & PRECISION CONTROL
+		// ========================================================
+
+		window.stereoMode = false;
+		window.freqL = 440;
+		window.freqR = 440;
+
+		(function () {
+			// Wait for tones library to be initialized
+			function patchEngine() {
+				if (!window.tones || !window.tones.current) {
+					setTimeout(patchEngine, 100);
+					return;
+				}
+
+				const tone = window.tones.current;
+
+				// Patch initOscillator for Dual-Channel support
+				const originalInit = tone.initOscillator;
+				tone.initOscillator = function () {
+					if (window.stereoMode && this.channels === 2) {
+						// Stop existing if any
+						if (this.oscL) { try { this.oscL.stop(); } catch (e) { } }
+						if (this.oscR) { try { this.oscR.stop(); } catch (e) { } }
+
+						this.oscL = tones.context.createOscillator();
+						this.oscR = tones.context.createOscillator();
+
+						this.oscL.connect(this.leftGainNode);
+						this.oscR.connect(this.rightGainNode);
+
+						this.oscL.frequency.value = window.freqL;
+						this.oscR.frequency.value = window.freqR;
+						this.oscL.type = this.oscR.type = this.type;
+
+						this.oscillator = this.oscL; // Compatibility
+					} else {
+						originalInit.call(this);
+					}
+				};
+
+				// Patch play/stop for dual oscillators
+				const originalPlay = tone.play;
+				tone.play = function (t0) {
+					if (window.stereoMode && this.channels === 2) {
+						if (this.playing) return false;
+						this.initOscillator();
+						const t = t0 || tones.context.currentTime;
+						this.oscL.start(t);
+						this.oscR.start(t);
+						this.playing = true;
+						this.fadeGainNode.gain.setTargetAtTime(1, t, 0.05);
+						return true;
+					}
+					return originalPlay.call(this, t0);
+				};
+
+				const originalStop = tone.stop;
+				tone.stop = function (t0) {
+					if (window.stereoMode && this.channels === 2) {
+						if (!this.playing) return false;
+						const t = t0 || tones.context.currentTime;
+						this.fadeGainNode.gain.setTargetAtTime(0, t, 0.05);
+
+						const self = this;
+						this.oscillatorStopTimeoutID = setTimeout(() => {
+							try { self.oscL.stop(); self.oscR.stop(); } catch (e) { }
+							self.playing = false;
+						}, 500);
+						return true;
+					}
+					return originalStop.call(this, t0);
+				};
+
+				// Precision Freq Update
+				const originalSetFreq = tone.setFreq;
+				tone.setFreq = function (f, chan) {
+					if (window.stereoMode && this.channels === 2) {
+						if (chan === 'L') {
+							window.freqL = f;
+							if (this.playing && this.oscL) this.oscL.frequency.setTargetAtTime(f, tones.context.currentTime, 0.02);
+						} else if (chan === 'R') {
+							window.freqR = f;
+							if (this.playing && this.oscR) this.oscR.frequency.setTargetAtTime(f, tones.context.currentTime, 0.02);
+						} else {
+							window.freqL = window.freqR = f;
+							if (this.playing) {
+								if (this.oscL) this.oscL.frequency.setTargetAtTime(f, tones.context.currentTime, 0.02);
+								if (this.oscR) this.oscR.frequency.setTargetAtTime(f, tones.context.currentTime, 0.02);
+							}
+						}
+					} else {
+						originalSetFreq.call(this, f);
+					}
+				};
+			}
+
+			patchEngine();
+		})();
+
+		// Global Helpers
+		window.toggleStereoMode = function (enabled) {
+			window.stereoMode = enabled;
+			const wasPlaying = window.tones && window.tones.playing;
+			if (wasPlaying) { tones.stop(); }
+
+			// Show/Hide inputs
+			const monoGroup = document.getElementById('mono-freq-group');
+			const stereoGroup = document.getElementById('stereo-freq-inputs');
+			if (monoGroup) monoGroup.style.display = enabled ? 'none' : 'inline-flex';
+			if (stereoGroup) stereoGroup.style.display = enabled ? 'inline-flex' : 'none';
+
+			// Sync freq
+			if (enabled) {
+				window.freqL = window.freqR = window.sliderFreq || 440;
+				document.getElementById('freq-l-input').value = window.freqL;
+				document.getElementById('freq-r-input').value = window.freqR;
+			}
+
+			if (wasPlaying) { setTimeout(() => tones.play(), 50); }
+		};
+
+		window.setFreqL = function (val) {
+			const f = parseFloat(val);
+			if (isNaN(f) || f < 1) return;
+			window.freqL = f;
+			if (window.tones && tones.current) tones.current.setFreq(f, 'L');
+		};
+
+		window.setFreqR = function (val) {
+			const f = parseFloat(val);
+			if (isNaN(f) || f < 1) return;
+			window.freqR = f;
+			if (window.tones && tones.current) tones.current.setFreq(f, 'R');
+		};
+
+		// Precision Volume Override
+		const originalSetVolume = window.setVolume;
+		window.setVolume = function (v) {
+			if (v < 0 || v > 1) return;
+			window.volume = v;
+			if (window.tones && tones.current) {
+				tones.current.setVolume(v);
+			}
+			// Update UI readout with decimals only if it's a precision adjustment
+			const readout = document.getElementById('volume-readout');
+			if (readout) {
+				const pct = (v * 100).toFixed(v === Math.round(v * 100) / 100 ? 0 : 2);
+				readout.innerHTML = pct + '%';
+			}
+			// Update slider without triggering 'change' loop
+			if (window.volSlider) {
+				$(window.volSlider).slider('value', v * 100);
+			}
+		};
+
 		// Fix frequency readout initialization - ensure sliderFreq is set and readout is updated
-		(function() {
+		(function () {
 			// Initialize sliderFreq to default value immediately
 			if (typeof window.sliderFreq === 'undefined' || window.sliderFreq === null) {
 				window.sliderFreq = 440;
 			}
-			
+
 			function ensureFrequencyReadout() {
 				// Check if tone generator is initialized
 				if (typeof window.slider_jq !== 'undefined' && typeof window.freqReadout !== 'undefined') {
@@ -1218,7 +1374,7 @@
 							} else {
 								window.sliderFreq = 440; // fallback
 							}
-						} catch(e) {
+						} catch (e) {
 							window.sliderFreq = 440;
 						}
 					}
@@ -1230,18 +1386,18 @@
 					if (window.tones && window.tones.current && typeof window.tones.current.setFreq === 'function') {
 						try {
 							window.tones.current.setFreq(window.sliderFreq);
-						} catch(e) {}
+						} catch (e) { }
 					}
 				}
 			}
-			
+
 			// Hook into the original init function to ensure sliderFreq is set immediately
 			var originalInit = window.init;
 			if (typeof originalInit === 'function') {
-				window.init = function() {
+				window.init = function () {
 					originalInit.apply(this, arguments);
 					// Set sliderFreq immediately after init completes
-					setTimeout(function() {
+					setTimeout(function () {
 						if (typeof window.slider_jq !== 'undefined') {
 							try {
 								var sliderValue = window.slider_jq.slider('value');
@@ -1263,12 +1419,12 @@
 										window.tones.current.setType(window.waveType);
 									}
 								}
-							} catch(e) {
+							} catch (e) {
 								window.sliderFreq = 440;
 								if (window.tones && window.tones.current && typeof window.tones.current.setFreq === 'function') {
 									try {
 										window.tones.current.setFreq(440);
-									} catch(e2) {}
+									} catch (e2) { }
 								}
 							}
 						} else {
@@ -1276,17 +1432,17 @@
 							if (window.tones && window.tones.current && typeof window.tones.current.setFreq === 'function') {
 								try {
 									window.tones.current.setFreq(440);
-								} catch(e) {}
+								} catch (e) { }
 							}
 						}
 					}, 0);
 				};
 			}
-			
+
 			// Also patch onPlayButtonClick to ensure sliderFreq is set before playing
 			var originalOnPlayButtonClick = window.onPlayButtonClick;
 			if (typeof originalOnPlayButtonClick === 'function') {
-				window.onPlayButtonClick = function() {
+				window.onPlayButtonClick = function () {
 					// Ensure sliderFreq is set before playing
 					if (typeof window.sliderFreq === 'undefined' || window.sliderFreq === null) {
 						if (typeof window.slider_jq !== 'undefined') {
@@ -1297,14 +1453,14 @@
 								} else {
 									window.sliderFreq = 440;
 								}
-							} catch(e) {
+							} catch (e) {
 								window.sliderFreq = 440;
 							}
 						} else {
 							window.sliderFreq = 440;
 						}
 					}
-					
+
 					// Ensure tones.current has the correct frequency and wave type before playing
 					if (window.tones && window.tones.current) {
 						if (typeof window.sliderFreq !== 'undefined' && window.sliderFreq !== null) {
@@ -1318,21 +1474,21 @@
 							}
 						}
 					}
-					
+
 					// Call original function
 					originalOnPlayButtonClick.apply(this, arguments);
 				};
 			}
-			
+
 			// Try multiple times to catch initialization
 			setTimeout(ensureFrequencyReadout, 100);
 			setTimeout(ensureFrequencyReadout, 500);
 			setTimeout(ensureFrequencyReadout, 1000);
 			setTimeout(ensureFrequencyReadout, 2000);
-			
+
 			// Also hook into window load
 			if (document.readyState === 'loading') {
-				document.addEventListener('DOMContentLoaded', function() {
+				document.addEventListener('DOMContentLoaded', function () {
 					setTimeout(ensureFrequencyReadout, 200);
 					setTimeout(ensureFrequencyReadout, 500);
 					setTimeout(ensureFrequencyReadout, 1000);
@@ -1342,13 +1498,13 @@
 				setTimeout(ensureFrequencyReadout, 500);
 				setTimeout(ensureFrequencyReadout, 1000);
 			}
-			
-			window.addEventListener('load', function() {
+
+			window.addEventListener('load', function () {
 				setTimeout(ensureFrequencyReadout, 300);
 				setTimeout(ensureFrequencyReadout, 800);
 				setTimeout(ensureFrequencyReadout, 1500);
 			});
-			
+
 			// Also try to set sliderFreq directly if slider exists but init hasn't run yet
 			function trySetSliderFreqDirectly() {
 				if (typeof window.slider_jq !== 'undefined' && (typeof window.sliderFreq === 'undefined' || window.sliderFreq === null)) {
@@ -1365,32 +1521,30 @@
 						} else {
 							window.sliderFreq = 440;
 						}
-					} catch(e) {
+					} catch (e) {
 						window.sliderFreq = 440;
 					}
 				}
 			}
-			
+
 			// Try direct approach multiple times
 			setTimeout(trySetSliderFreqDirectly, 50);
 			setTimeout(trySetSliderFreqDirectly, 200);
 			setTimeout(trySetSliderFreqDirectly, 500);
 			setTimeout(trySetSliderFreqDirectly, 1000);
-			
+
 			if (document.readyState === 'loading') {
 				document.addEventListener('DOMContentLoaded', trySetSliderFreqDirectly);
 			} else {
 				trySetSliderFreqDirectly();
 			}
-			
-			window.addEventListener('load', function() {
+
+			window.addEventListener('load', function () {
 				setTimeout(trySetSliderFreqDirectly, 100);
 				setTimeout(trySetSliderFreqDirectly, 500);
 			});
 		})();
 	</script>
-
-	<script src="website/js/stereo-freq.js"></script>
 
 	<script>
 		if (getCookie("ab-otgbanad") !== "y") { //user removed ads (does not include adblock)
@@ -1467,20 +1621,32 @@
 						</svg></button>
 					<span class=separator style="margin-right: 55px"></span>
 				</span>
-				<span class=control-group>
-					<label style="margin-right: 5px; font-size: 11px;">Stereo Freq:</label>
-					<input type="checkbox" id="stereo-freq-checkbox" title="Enable separate left/right frequencies" style="margin-right: 10px;">
-					<span id="left-freq-group" style="display: none; margin-right: 15px;">
-						<label style="font-size: 10px; margin-right: 3px;">L:</label>
-						<input type="number" id="left-freq-input" min="1" max="20154" step="0.01" value="440" style="width: 70px; font-size: 11px; padding: 2px;">
-						<span id="left-freq-readout" style="font-size: 11px; margin-left: 3px;">440 Hz</span>
+				<span class="control-group stereo-controls"
+					style="border: 1px solid rgba(135, 78, 35, 0.2); padding: 5px 10px; border-radius: 5px; background: rgba(255, 255, 255, 0.05); display: inline-flex; align-items: center;">
+					<label style="margin-right: 8px; font-weight: 600; font-size: 12px; color: #7a3400;">STEREO:</label>
+					<input type="checkbox" id="stereo-mode-checkbox" onchange="window.toggleStereoMode(this.checked)"
+						style="margin-right: 15px; width: 16px; height: 16px; vertical-align: middle;">
+
+					<span id="mono-freq-group" style="display: inline-flex; align-items: center;">
+						<span id="freq-readout"
+							style="font-weight: bold; font-size: 14px; min-width: 60px; display: inline-block;">440
+							Hz</span>
 					</span>
-					<span id="right-freq-group" style="display: none; margin-right: 10px;">
-						<label style="font-size: 10px; margin-right: 3px;">R:</label>
-						<input type="number" id="right-freq-input" min="1" max="20154" step="0.01" value="440" style="width: 70px; font-size: 11px; padding: 2px;">
-						<span id="right-freq-readout" style="font-size: 11px; margin-left: 3px;">440 Hz</span>
+
+					<span id="stereo-freq-inputs" style="display: none; gap: 15px; align-items: center;">
+						<span style="display: inline-flex; align-items: center; gap: 5px;">
+							<label style="font-size: 11px; color: #8e420b; font-weight: bold;">L:</label>
+							<input type="number" id="freq-l-input" step="0.1" value="440"
+								oninput="window.setFreqL(this.value)"
+								style="width: 75px; padding: 3px; border: 1px solid #a55f2b; border-radius: 3px; font-size: 12px;">
+						</span>
+						<span style="display: inline-flex; align-items: center; gap: 5px;">
+							<label style="font-size: 11px; color: #8e420b; font-weight: bold;">R:</label>
+							<input type="number" id="freq-r-input" step="0.1" value="440"
+								oninput="window.setFreqR(this.value)"
+								style="width: 75px; padding: 3px; border: 1px solid #a55f2b; border-radius: 3px; font-size: 12px;">
+						</span>
 					</span>
-					<span class=separator style="margin-right: 10px;"></span>
 				</span>
 				<span class=control-group>
 					<button class="small-button" id="octave-down-button" title="− 1 octave (frequency ÷ 2)"
@@ -1593,9 +1759,17 @@
 				<div class="phyphox-panel">
 					<h3>Magnetism Control</h3>
 
-					<div class="phyphox-display">
-						<div class="mt-value"><span id="current-mt-display">0.0</span></div>
-						<div class="mt-label">Current Microteslas (μT)</div>
+					<div class="phyphox-display"
+						style="display: flex; justify-content: space-around; align-items: center;">
+						<div>
+							<div class="mt-value"><span id="current-mt-display">0.0</span></div>
+							<div class="mt-label">Current (μT)</div>
+						</div>
+						<div style="border-left: 1px solid #ddd; height: 40px;"></div>
+						<div>
+							<div class="mt-value" style="color: #e67e22;"><span id="peak-mt-display">0.0</span></div>
+							<div class="mt-label" style="color: #d35400;">PEAK (μT)</div>
+						</div>
 					</div>
 
 					<div class="phyphox-input-group">
@@ -1757,9 +1931,9 @@
 		</form>
 
 		<div id=footer>
-		Created by <a href="https://blog.szynalski.com/about/">Tomasz P. Szynalski</a>
-		<span class=sep style="margin: 0 3px; color: #ddd">|</span>
-		<a href="https://blog.szynalski.com/2012/08/29/online-tone-generator/">Comments</a>
+			Created by <a href="https://blog.szynalski.com/about/">Tomasz P. Szynalski</a>
+			<span class=sep style="margin: 0 3px; color: #ddd">|</span>
+			<a href="https://blog.szynalski.com/2012/08/29/online-tone-generator/">Comments</a>
 			<span class=sep style="margin: 0 3px; color: #ddd">|</span>
 			<a href="privacy.htm">Privacy policy</a>
 		</div>
