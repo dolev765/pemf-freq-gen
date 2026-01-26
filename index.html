@@ -1217,437 +1217,413 @@
 	<script>
 		/**
 		 * ========================================================
-		 * MASTER TONE ENGINE & SYNC CONTROLLER
+		 * TRUE STEREO SPLIT ENGINE - SEPARATE FREQUENCY PER EAR
 		 * ========================================================
-		 * Unified system for Stereo, Peak Detection, and Initialization
+		 * Uses StereoPannerNode to hard-pan each oscillator to its ear
 		 */
 
 		window.stereoMode = false;
-		window.freqL = window.freqL || 440;
-		window.freqR = window.freqR || 440;
+		window.freqL = 440;
+		window.freqR = 440;
 		window._editingL = false;
 		window._editingR = false;
 		window._updatingL = false;
 		window._updatingR = false;
-		
+
+		// Stereo engine state
+		window.StereoEngine = {
+			context: null,
+			oscL: null,
+			oscR: null,
+			panL: null,
+			panR: null,
+			gainL: null,
+			gainR: null,
+			masterGain: null,
+			playing: false,
+			waveType: 'sine',
+
+			init: function() {
+				if (this.context) return;
+				
+				// Use existing context if available
+				if (window.tones && window.tones.context) {
+					this.context = window.tones.context;
+				} else {
+					this.context = new (window.AudioContext || window.webkitAudioContext)();
+				}
+
+				// Master gain for volume control
+				this.masterGain = this.context.createGain();
+				this.masterGain.connect(this.context.destination);
+				this.masterGain.gain.value = window.volume || 0.5;
+
+				// LEFT channel: oscillator -> gain -> pan hard left -> master
+				this.gainL = this.context.createGain();
+				this.panL = this.context.createStereoPanner();
+				this.panL.pan.value = -1; // HARD LEFT
+				this.gainL.connect(this.panL);
+				this.panL.connect(this.masterGain);
+
+				// RIGHT channel: oscillator -> gain -> pan hard right -> master
+				this.gainR = this.context.createGain();
+				this.panR = this.context.createStereoPanner();
+				this.panR.pan.value = 1; // HARD RIGHT
+				this.gainR.connect(this.panR);
+				this.panR.connect(this.masterGain);
+
+				console.log('StereoEngine initialized with StereoPanner');
+			},
+
+			play: function() {
+				if (this.playing) return;
+				this.init();
+
+				// Resume context if suspended
+				if (this.context.state === 'suspended') {
+					this.context.resume();
+				}
+
+				// Create fresh oscillators
+				this.oscL = this.context.createOscillator();
+				this.oscR = this.context.createOscillator();
+
+				this.oscL.type = this.waveType;
+				this.oscR.type = this.waveType;
+
+				this.oscL.frequency.value = window.freqL;
+				this.oscR.frequency.value = window.freqR;
+
+				this.oscL.connect(this.gainL);
+				this.oscR.connect(this.gainR);
+
+				this.oscL.start();
+				this.oscR.start();
+
+				this.playing = true;
+				console.log('StereoEngine playing: L=' + window.freqL + 'Hz, R=' + window.freqR + 'Hz');
+			},
+
+			stop: function() {
+				if (!this.playing) return;
+
+				if (this.oscL) {
+					try { this.oscL.stop(); } catch(e) {}
+					this.oscL.disconnect();
+					this.oscL = null;
+				}
+				if (this.oscR) {
+					try { this.oscR.stop(); } catch(e) {}
+					this.oscR.disconnect();
+					this.oscR = null;
+				}
+
+				this.playing = false;
+				console.log('StereoEngine stopped');
+			},
+
+			setFreqL: function(f) {
+				window.freqL = f;
+				if (this.playing && this.oscL) {
+					this.oscL.frequency.setTargetAtTime(f, this.context.currentTime, 0.02);
+				}
+			},
+
+			setFreqR: function(f) {
+				window.freqR = f;
+				if (this.playing && this.oscR) {
+					this.oscR.frequency.setTargetAtTime(f, this.context.currentTime, 0.02);
+				}
+			},
+
+			setVolume: function(v) {
+				if (this.masterGain) {
+					this.masterGain.gain.setTargetAtTime(v, this.context.currentTime, 0.05);
+				}
+			},
+
+			setWaveType: function(type) {
+				this.waveType = type;
+				if (this.oscL) this.oscL.type = type;
+				if (this.oscR) this.oscR.type = type;
+			}
+		};
+
 		// PATCH window.setFreq to NOT override stereo inputs when stereo mode is ON
 		(function() {
-			var originalSetFreq = window.setFreq;
-			window.setFreq = function(f) {
-				// When stereo mode is ON, ignore main slider updates - only stereo inputs control frequency
-				if (window.stereoMode) {
-					// Still update sliderFreq for display, but DON'T update the actual oscillators
-					window.sliderFreq = f;
-					if (window.freqReadout) window.freqReadout.update();
-					// DO NOT call tones.current.setFreq - let the stereo inputs control the oscillators
-					return true;
-				}
-				// Normal mode - use original function
-				return originalSetFreq.call(this, f);
-			};
-		})();
-
-		(function () {
-			// Deep patch of the core Tones engine
-			function applyMasterPatch() {
-				if (!window.tones || !window.tones.current) {
-					setTimeout(applyMasterPatch, 100);
+			function patchSetFreq() {
+				if (typeof window.setFreq !== 'function') {
+					setTimeout(patchSetFreq, 100);
 					return;
 				}
-
-				const tone = window.tones.current;
-
-				// 1. DUAL OSCILLATOR ENGINE
-				const originalInit = tone.initOscillator;
-				tone.initOscillator = function () {
-					// Safety cleanup of any orphans
-					if (this.oscL) { try { this.oscL.stop(); } catch (e) { } }
-					if (this.oscR) { try { this.oscR.stop(); } catch (e) { } }
-					this.oscL = this.oscR = null;
-
-					if (window.stereoMode && this.channels === 2) {
-						this.oscL = tones.context.createOscillator();
-						this.oscR = tones.context.createOscillator();
-
-						this.oscL.connect(this.leftGainNode);
-						this.oscR.connect(this.rightGainNode);
-
-						// ACOUSTIC SAFETY: Scale gain to 0.6 per channel to prevent clipping in stereo
-						// (1.0 + 1.0 = 2.0 = distortion/ear splitting)
-						this.leftGainNode.gain.setTargetAtTime(0.6 * Math.min(1, 1 - this.balance), tones.context.currentTime, 0.05);
-						this.rightGainNode.gain.setTargetAtTime(0.6 * Math.min(1, 1 + this.balance), tones.context.currentTime, 0.05);
-
-						this.oscL.frequency.value = window.freqL;
-						this.oscR.frequency.value = window.freqR;
-						this.oscL.type = this.oscR.type = this.type;
-						this.oscillator = this.oscL;
-					} else {
-						// MONO RESET: Ensure full gain is restored
-						if (this.leftGainNode) this.leftGainNode.gain.setTargetAtTime(Math.min(1, 1 - this.balance), tones.context.currentTime, 0.05);
-						if (this.rightGainNode) this.rightGainNode.gain.setTargetAtTime(Math.min(1, 1 + this.balance), tones.context.currentTime, 0.05);
-						originalInit.call(this);
-					}
-				};
-
-				const originalPlay = tone.play;
-				tone.play = function (t0) {
-					if (window.stereoMode && this.channels === 2) {
-						if (this.playing) return false;
-						this.initOscillator();
-						const t = t0 || tones.context.currentTime;
-						if (this.oscL) this.oscL.start(t);
-						if (this.oscR) this.oscR.start(t);
-						this.playing = true;
-						this.fadeGainNode.gain.setTargetAtTime(1, t, 0.05);
+				var originalSetFreq = window.setFreq;
+				window.setFreq = function(f) {
+					if (window.stereoMode) {
+						// In stereo mode, main slider only updates display
+						window.sliderFreq = f;
+						if (window.freqReadout) window.freqReadout.update();
 						return true;
 					}
-					return originalPlay.call(this, t0);
+					return originalSetFreq.call(this, f);
 				};
-
-				const originalStop = tone.stop;
-				tone.stop = function (t0) {
-					// FLALWESS CLEANUP: Stop EVERYTHING regardless of current mode
-					if (this.oscL || this.oscR) {
-						if (!this.playing) return false;
-						const t = t0 || tones.context.currentTime;
-						this.fadeGainNode.gain.setTargetAtTime(0, t, 0.05);
-						const self = this;
-						if (this.oscillatorStopTimeoutID) clearTimeout(this.oscillatorStopTimeoutID);
-						this.oscillatorStopTimeoutID = setTimeout(() => {
-							try { if (self.oscL) self.oscL.stop(); } catch (e) { }
-							try { if (self.oscR) self.oscR.stop(); } catch (e) { }
-							self.oscL = self.oscR = null;
-							self.playing = false;
-						}, 500);
-						return true;
-					}
-					return originalStop.call(this, t0);
-				};
-
-				// 2. FLAWLESS SYNC LOGIC
-				const originalSetFreq = tone.setFreq;
-				tone.setFreq = function (f, chan) {
-					if (window.stereoMode && this.channels === 2) {
-						if (chan === 'L') {
-							window.freqL = f;
-							if (this.playing && this.oscL) this.oscL.frequency.setTargetAtTime(f, tones.context.currentTime, 0.02);
-							// NEVER update input from setFreq - inputs are completely independent
-						} else if (chan === 'R') {
-							window.freqR = f;
-							if (this.playing && this.oscR) this.oscR.frequency.setTargetAtTime(f, tones.context.currentTime, 0.02);
-							// NEVER update input from setFreq - inputs are completely independent
-						} else {
-							// No channel specified - update both frequencies but NEVER the inputs when stereo mode is ON
-							window.freqL = window.freqR = f;
-							if (this.playing) {
-								if (this.oscL) this.oscL.frequency.setTargetAtTime(f, tones.context.currentTime, 0.02);
-								if (this.oscR) this.oscR.frequency.setTargetAtTime(f, tones.context.currentTime, 0.02);
-							}
-							// NEVER update inputs when stereo mode is ON - they are completely independent
-							// Only update if stereo mode is OFF (from main slider)
-							if (!window.stereoMode) {
-								const inL = document.getElementById('freq-l-input');
-								const inR = document.getElementById('freq-r-input');
-								if (inL && document.activeElement !== inL && !inL.matches(':focus') && !window._editingL && !window._updatingL) inL.value = f.toFixed(1);
-								if (inR && document.activeElement !== inR && !inR.matches(':focus') && !window._editingR && !window._updatingR) inR.value = f.toFixed(1);
-							}
-						}
-					} else {
-						window.freqL = window.freqR = f;
-						// Only update inputs if stereo mode is OFF and inputs are not focused/being edited
-						if (!window.stereoMode) {
-							const inL = document.getElementById('freq-l-input');
-							const inR = document.getElementById('freq-r-input');
-							if (inL && document.activeElement !== inL && !inL.matches(':focus') && !window._editingL && !window._updatingL) inL.value = f.toFixed(1);
-							if (inR && document.activeElement !== inR && !inR.matches(':focus') && !window._editingR && !window._updatingR) inR.value = f.toFixed(1);
-						}
-						originalSetFreq.call(this, f);
-					}
-				};
-
-				// Initial sync call - only if stereo mode is OFF
-				setTimeout(() => {
-					if (window.sliderFreq && !window.stereoMode) { 
-						syncUIInputs(window.sliderFreq); 
-						window.freqReadout.update(); 
-					}
-				}, 100);
 			}
-
-			function syncUIInputs(f) {
-				// Sync both inputs only when user is NOT actively typing in them AND stereo mode is OFF
-				// When stereo mode is ON, inputs should be completely independent - NEVER sync them
-				if (!window.stereoMode) {
-					const inL = document.getElementById('freq-l-input');
-					const inR = document.getElementById('freq-r-input');
-					// Only update if input is not focused, not being edited, and not being updated
-					if (inL && document.activeElement !== inL && !inL.matches(':focus') && !window._editingL && !window._updatingL) {
-						inL.value = f.toFixed(1);
-					}
-					if (inR && document.activeElement !== inR && !inR.matches(':focus') && !window._editingR && !window._updatingR) {
-						inR.value = f.toFixed(1);
-					}
-				}
-				// When stereo mode is ON, DO NOTHING - inputs are completely independent
-			}
-
-			// Hook into main init process
-			const originalWindowInit = window.init;
-			window.init = function () {
-				if (originalWindowInit) originalWindowInit.apply(this, arguments);
-				setTimeout(applyMasterPatch, 50);
-			};
-
-			applyMasterPatch();
+			patchSetFreq();
 		})();
-		
-		// ISOLATE INPUT HANDLERS - Prevent any cross-updates
-		(function() {
-			function setupIsolatedHandlers() {
+
+		// TOGGLE STEREO MODE
+		window.toggleStereoMode = function(enabled) {
+			var wasPlaying = window.stereoMode ? window.StereoEngine.playing : (window.tones && window.tones.playing);
+
+			if (wasPlaying) {
+				// Stop current playback
+				if (window.stereoMode) {
+					window.StereoEngine.stop();
+				} else if (window.tones && window.tones.playing) {
+					window.tones.stop();
+				}
+			}
+
+			window.stereoMode = enabled;
+
+			// UI updates
+			var mainGroup = document.getElementById('main-freq-controls');
+			var stereoInputs = document.getElementById('stereo-freq-inputs');
+			var stereoBtn = document.getElementById('stereo-mode-btn');
+			var mainSlider = document.getElementById('slider');
+
+			if (enabled) {
+				if (mainGroup) mainGroup.style.display = 'none';
+				if (stereoInputs) stereoInputs.style.display = 'inline-flex';
+				if (stereoBtn) {
+					stereoBtn.classList.add('active');
+					stereoBtn.textContent = 'STOP STEREO';
+					stereoBtn.style.background = '#8e420b';
+					stereoBtn.style.color = '#fff';
+				}
+				if (mainSlider && window.slider_jq) {
+					window.slider_jq.slider('disable');
+				}
+
+				// Initialize frequencies from current slider
+				window.freqL = window.freqR = window.sliderFreq || 440;
 				var inL = document.getElementById('freq-l-input');
 				var inR = document.getElementById('freq-r-input');
-				
-				if (!inL || !inR) {
-					setTimeout(setupIsolatedHandlers, 100);
+				if (inL) inL.value = window.freqL.toFixed(1);
+				if (inR) inR.value = window.freqR.toFixed(1);
+
+				// Init stereo engine
+				window.StereoEngine.init();
+				window.StereoEngine.waveType = window.waveType || 'sine';
+				window.StereoEngine.setVolume(window.volume || 0.5);
+
+				// Resume playback if was playing
+				if (wasPlaying) {
+					setTimeout(function() {
+						window.StereoEngine.play();
+						window.playIndicator && window.playIndicator.update && window.playIndicator.update();
+					}, 100);
+				}
+			} else {
+				if (mainGroup) mainGroup.style.display = 'inline-flex';
+				if (stereoInputs) stereoInputs.style.display = 'none';
+				if (stereoBtn) {
+					stereoBtn.classList.remove('active');
+					stereoBtn.textContent = 'STEREO ENGINE';
+					stereoBtn.style.background = '';
+					stereoBtn.style.color = '';
+				}
+				if (mainSlider && window.slider_jq) {
+					window.slider_jq.slider('enable');
+				}
+
+				// Resume mono playback if was playing
+				if (wasPlaying && window.tones) {
+					setTimeout(function() {
+						window.tones.play();
+						window.playIndicator && window.playIndicator.update && window.playIndicator.update();
+					}, 100);
+				}
+			}
+		};
+
+		// OVERRIDE PLAY BUTTON for stereo mode
+		(function() {
+			function patchPlayButton() {
+				var playBtn = document.getElementById('play-button');
+				if (!playBtn) {
+					setTimeout(patchPlayButton, 100);
 					return;
 				}
-				
-				// Remove any existing handlers
+
+				var originalOnClick = playBtn.onclick;
+				playBtn.onclick = function(e) {
+					if (window.stereoMode) {
+						if (window.StereoEngine.playing) {
+							window.StereoEngine.stop();
+							playBtn.textContent = 'Play';
+						} else {
+							window.StereoEngine.play();
+							playBtn.textContent = 'Stop';
+						}
+						if (window.playIndicator && window.playIndicator.update) {
+							// Hack to make indicator work
+							var origPlaying = window.tones ? window.tones.playing : false;
+							if (window.tones) window.tones.playing = window.StereoEngine.playing;
+							window.playIndicator.update();
+							if (window.tones) window.tones.playing = origPlaying;
+						}
+						return;
+					}
+					// Normal mode
+					if (originalOnClick) originalOnClick.call(this, e);
+				};
+			}
+			
+			if (document.readyState === 'loading') {
+				document.addEventListener('DOMContentLoaded', patchPlayButton);
+			} else {
+				setTimeout(patchPlayButton, 200);
+			}
+		})();
+
+		// SETUP INPUT HANDLERS
+		(function() {
+			function setupInputHandlers() {
+				var inL = document.getElementById('freq-l-input');
+				var inR = document.getElementById('freq-r-input');
+
+				if (!inL || !inR) {
+					setTimeout(setupInputHandlers, 100);
+					return;
+				}
+
+				// Clone to remove any old handlers
 				var newL = inL.cloneNode(true);
 				var newR = inR.cloneNode(true);
 				inL.parentNode.replaceChild(newL, inL);
 				inR.parentNode.replaceChild(newR, inR);
 				inL = newL;
 				inR = newR;
-				
-				// LEFT INPUT - Completely isolated
+
+				// LEFT INPUT
 				inL.addEventListener('input', function(e) {
 					e.stopPropagation();
 					e.stopImmediatePropagation();
 					var v = parseFloat(this.value);
 					if (!isNaN(v) && v >= 1 && v <= 20154) {
 						window._updatingL = true;
-						window.freqL = v;
-						var t = window.tones;
-						if (t && t.current) {
-							// Always update via setFreq to ensure proper initialization
-							t.current.setFreq(v, 'L');
-							// Also directly update oscillator if it exists and is playing
-							if (t.current.oscL) {
-								if (t.current.playing) {
-									t.current.oscL.frequency.setTargetAtTime(v, t.context.currentTime, 0.02);
-								} else {
-									// If not playing, set the frequency for when it starts
-									t.current.oscL.frequency.value = v;
-								}
-							}
-						}
+						window.StereoEngine.setFreqL(v);
 						window._updatingL = false;
 					}
 				}, true);
-				
+
 				inL.addEventListener('change', function(e) {
 					e.stopPropagation();
-					e.stopImmediatePropagation();
 					var v = parseFloat(this.value);
 					if (!isNaN(v) && v >= 1 && v <= 20154) {
-						window._updatingL = true;
-						window.freqL = v;
 						this.value = v.toFixed(1);
-						window._updatingL = false;
+						window.StereoEngine.setFreqL(v);
 					} else {
-						this.value = (window.freqL || 440).toFixed(1);
+						this.value = window.freqL.toFixed(1);
 					}
 				}, true);
-				
-				inL.addEventListener('focus', function(e) {
-					window._editingL = true;
-				}, true);
-				
-				inL.addEventListener('blur', function(e) {
-					window._editingL = false;
-				}, true);
-				
-				// RIGHT INPUT - Completely isolated
+
+				inL.addEventListener('focus', function() { window._editingL = true; }, true);
+				inL.addEventListener('blur', function() { window._editingL = false; }, true);
+
+				// RIGHT INPUT
 				inR.addEventListener('input', function(e) {
 					e.stopPropagation();
 					e.stopImmediatePropagation();
 					var v = parseFloat(this.value);
 					if (!isNaN(v) && v >= 1 && v <= 20154) {
 						window._updatingR = true;
-						window.freqR = v;
-						var t = window.tones;
-						if (t && t.current) {
-							// Always update via setFreq to ensure proper initialization
-							t.current.setFreq(v, 'R');
-							// Also directly update oscillator if it exists
-							if (t.current.oscR) {
-								if (t.current.playing) {
-									t.current.oscR.frequency.setTargetAtTime(v, t.context.currentTime, 0.02);
-								} else {
-									// If not playing, set the frequency for when it starts
-									t.current.oscR.frequency.value = v;
-								}
-							}
-						}
+						window.StereoEngine.setFreqR(v);
 						window._updatingR = false;
 					}
 				}, true);
-				
+
 				inR.addEventListener('change', function(e) {
 					e.stopPropagation();
-					e.stopImmediatePropagation();
 					var v = parseFloat(this.value);
 					if (!isNaN(v) && v >= 1 && v <= 20154) {
-						window._updatingR = true;
-						window.freqR = v;
 						this.value = v.toFixed(1);
-						window._updatingR = false;
+						window.StereoEngine.setFreqR(v);
 					} else {
-						this.value = (window.freqR || 440).toFixed(1);
+						this.value = window.freqR.toFixed(1);
 					}
 				}, true);
-				
-				inR.addEventListener('focus', function(e) {
-					window._editingR = true;
-				}, true);
-				
-				inR.addEventListener('blur', function(e) {
-					window._editingR = false;
-				}, true);
+
+				inR.addEventListener('focus', function() { window._editingR = true; }, true);
+				inR.addEventListener('blur', function() { window._editingR = false; }, true);
+
+				console.log('Stereo input handlers attached');
 			}
-			
+
 			if (document.readyState === 'loading') {
-				document.addEventListener('DOMContentLoaded', setupIsolatedHandlers);
+				document.addEventListener('DOMContentLoaded', setupInputHandlers);
 			} else {
-				setupIsolatedHandlers();
+				setupInputHandlers();
 			}
 		})();
 
-		// GLOBAL HELPERS
-		window.toggleStereoMode = function (enabled) {
-			const wasPlaying = window.tones && window.tones.playing;
-
-			// HEARING PROTECTION: Gentle crossfade during switch
-			if (wasPlaying) {
-				if (window.tones.current && window.tones.current.fadeGainNode) {
-					window.tones.current.fadeGainNode.gain.linearRampToValueAtTime(0, tones.context.currentTime + 0.2);
-				}
-				setTimeout(() => {
-					performSwitch(enabled);
-					if (window.tones.current && window.tones.current.fadeGainNode) {
-						window.tones.current.fadeGainNode.gain.linearRampToValueAtTime(1, tones.context.currentTime + 0.2);
-					}
-				}, 250);
-			} else {
-				performSwitch(enabled);
-			}
-
-			function performSwitch(val) {
-				window.stereoMode = val;
-
-				// UI SYNC: Hide standard block, show Stereo panel
-				const mainGroup = document.getElementById('main-freq-controls');
-				const stereoInputs = document.getElementById('stereo-freq-inputs');
-				const stereoBtn = document.getElementById('stereo-mode-btn');
-
-				if (val) {
-					if (mainGroup) mainGroup.style.display = 'none';
-					if (stereoInputs) stereoInputs.style.display = 'inline-flex';
-					if (stereoBtn) {
-						stereoBtn.classList.add('active');
-						stereoBtn.textContent = 'STOP STEREO';
-						stereoBtn.style.background = '#8e420b';
-						stereoBtn.style.color = '#fff';
-					}
-					// DISABLE main slider when stereo mode is ON
-					var mainSlider = document.getElementById('slider');
-					if (mainSlider && window.slider_jq) {
-						window.slider_jq.slider('disable');
-					}
-
-					// Initialize both to same value when enabling stereo mode
-					// But only update inputs if they're not currently focused
-					window.freqL = window.freqR = window.sliderFreq || 440;
-					const inL = document.getElementById('freq-l-input');
-					const inR = document.getElementById('freq-r-input');
-					// Use setTimeout to avoid conflicts with any ongoing input
-					setTimeout(function() {
-						if (inL && document.activeElement !== inL && !window._editingL && !window._updatingL) inL.value = window.freqL.toFixed(1);
-						if (inR && document.activeElement !== inR && !window._editingR && !window._updatingR) inR.value = window.freqR.toFixed(1);
-					}, 0);
-				} else {
-					if (mainGroup) mainGroup.style.display = 'inline-flex';
-					if (stereoInputs) stereoInputs.style.display = 'none';
-					if (stereoBtn) {
-						stereoBtn.classList.remove('active');
-						stereoBtn.textContent = 'STEREO ENGINE';
-						stereoBtn.style.background = '';
-						stereoBtn.style.color = '';
-					}
-					// ENABLE main slider when stereo mode is OFF
-					var mainSlider = document.getElementById('slider');
-					if (mainSlider && window.slider_jq) {
-						window.slider_jq.slider('enable');
-					}
-				}
-
-				// ACTIVATE CHANGE WITHOUT STOPPING ENGINE
-				if (wasPlaying && window.tones && tones.current) {
-					// Rebuild oscillators with current frequencies (preserve user-set values)
-					if (window.stereoMode && tones.current.channels === 2) {
-						var wasPlaying = tones.current.playing;
-						if (wasPlaying) {
-							tones.current.stop();
-							setTimeout(function() {
-								tones.current.initOscillator();
-								tones.current.play();
-							}, 100);
-						}
-					}
-				}
-			}
-		};
-
-		window.setFreqL = function (val, skipInputUpdate) {
-			const f = parseFloat(val);
-			if (!isNaN(f) && f >= 1 && f <= 20154) {
-				window.freqL = f;
-				if (window.tones && tones.current) {
-					// Temporarily disable input updates when called from user input
-					window._updatingFromInput = true;
-					tones.current.setFreq(f, 'L');
-					window._updatingFromInput = false;
-				}
-			}
-		};
-
-		window.setFreqR = function (val, skipInputUpdate) {
-			const f = parseFloat(val);
-			if (!isNaN(f) && f >= 1 && f <= 20154) {
-				window.freqR = f;
-				if (window.tones && tones.current) {
-					// Temporarily disable input updates when called from user input
-					window._updatingFromInput = true;
-					tones.current.setFreq(f, 'R');
-					window._updatingFromInput = false;
-				}
-			}
-		};
-
-		window.setVolume = function (v) {
+		// VOLUME SYNC for stereo mode
+		window.setVolume = function(v) {
 			if (v < 0 || v > 1) return;
 			window.volume = v;
-			if (window.tones && tones.current) {
-				tones.current.setVolume(v);
+
+			if (window.stereoMode) {
+				window.StereoEngine.setVolume(v);
+			} else if (window.tones && window.tones.current) {
+				window.tones.current.setVolume(v);
 			}
-			const readout = document.getElementById('volume-readout');
+
+			var readout = document.getElementById('volume-readout');
 			if (readout) {
-				const pct = (v * 100).toFixed(v === Math.round(v * 100) / 100 ? 0 : 2);
-				readout.innerHTML = pct + '%';
+				readout.innerHTML = Math.round(v * 100) + '%';
 			}
-			if (window.volSlider) { $(window.volSlider).slider('value', v * 100); }
+			if (window.volSlider) {
+				$(window.volSlider).slider('value', v * 100);
+			}
 		};
+
+		// WAVE TYPE SYNC for stereo mode
+		(function() {
+			function patchWaveType() {
+				if (typeof window.setWaveType !== 'function') {
+					setTimeout(patchWaveType, 200);
+					return;
+				}
+				var originalSetWaveType = window.setWaveType;
+				window.setWaveType = function(type) {
+					if (window.stereoMode) {
+						window.waveType = type;
+						window.StereoEngine.setWaveType(type);
+						if (window.waveSelector) window.waveSelector.update();
+						return;
+					}
+					originalSetWaveType.call(this, type);
+				};
+			}
+			patchWaveType();
+		})();
+
+		// Keyboard handler for space (play/stop) in stereo mode
+		(function() {
+			function patchKeyboard() {
+				document.addEventListener('keydown', function(e) {
+					if (e.keyCode === 32 && window.stereoMode) {
+						// Space pressed in stereo mode
+						var playBtn = document.getElementById('play-button');
+						if (playBtn && e.target === document.body) {
+							e.preventDefault();
+							playBtn.click();
+						}
+					}
+				}, true);
+			}
+			patchKeyboard();
+		})();
 	</script>
 
 	<script>
