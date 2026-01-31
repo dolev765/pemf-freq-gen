@@ -1636,6 +1636,112 @@
 			}
 			patchKeyboard();
 		})();
+
+		// IMPROVED WAVE SELECTOR - Keyboard shortcuts and better UI
+		(function() {
+			var waveTypes = ['sine', 'square', 'triangle', 'sawtooth'];
+			var waveNames = { 'sine': 'Sine', 'square': 'Square', 'triangle': 'Triangle', 'sawtooth': 'Sawtooth' };
+			
+			function updateWaveSelectorDisplay() {
+				var btn = document.getElementById('wave-selector');
+				var icon = document.getElementById('wave-selector-icon');
+				var label = document.getElementById('wave-selector-label');
+				if (!btn || !icon || !label) return;
+				
+				var currentType = window.waveType || 'sine';
+				icon.className = 'image-' + currentType;
+				icon.style.cssText = 'display: inline-block; vertical-align: middle; margin-right: 6px; width: 15px; height: 14px; background-image: url(icons.png); background-size: auto 15px;';
+				if (currentType === 'sine') icon.style.backgroundPosition = '-140px -2px';
+				else if (currentType === 'square') icon.style.backgroundPosition = '-172px -2px';
+				else if (currentType === 'triangle') icon.style.backgroundPosition = '-156px -2px';
+				else if (currentType === 'sawtooth') icon.style.backgroundPosition = '-188px -2px';
+				
+				label.textContent = waveNames[currentType] || 'Sine';
+				btn.title = 'Wave Type: ' + waveNames[currentType] + ' (Press 1-4: 1=Sine, 2=Square, 3=Triangle, 4=Sawtooth)';
+			}
+			
+			function cycleWaveType() {
+				var currentType = window.waveType || 'sine';
+				var currentIndex = waveTypes.indexOf(currentType);
+				if (currentIndex === -1) currentIndex = 0;
+				var nextIndex = (currentIndex + 1) % waveTypes.length;
+				var nextType = waveTypes[nextIndex];
+				if (window.setWaveType) {
+					window.setWaveType(nextType);
+					updateWaveSelectorDisplay();
+				}
+			}
+			
+			function initWaveSelector() {
+				var btn = document.getElementById('wave-selector');
+				if (!btn) {
+					setTimeout(initWaveSelector, 100);
+					return;
+				}
+				
+				// Create icon and label if they don't exist
+				var icon = document.getElementById('wave-selector-icon');
+				var label = document.getElementById('wave-selector-label');
+				if (!icon) {
+					icon = document.createElement('span');
+					icon.id = 'wave-selector-icon';
+					btn.insertBefore(icon, btn.firstChild);
+				}
+				if (!label) {
+					label = document.createElement('span');
+					label.id = 'wave-selector-label';
+					btn.appendChild(label);
+				}
+				
+				// Override click to cycle instead of opening menu
+				var originalOnClick = btn.onclick;
+				btn.onclick = function(e) {
+					e.preventDefault();
+					e.stopPropagation();
+					cycleWaveType();
+					return false;
+				};
+				
+				// Update display initially and whenever wave type changes
+				updateWaveSelectorDisplay();
+				
+				// Hook into setWaveType to update display
+				var originalSetWaveType = window.setWaveType;
+				if (originalSetWaveType) {
+					window.setWaveType = function(type) {
+						originalSetWaveType.call(this, type);
+						updateWaveSelectorDisplay();
+					};
+				}
+				
+				// Add keyboard shortcuts (1-4 keys)
+				document.addEventListener('keydown', function(e) {
+					// Only trigger if not typing in an input field
+					if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+					
+					var key = e.key;
+					var waveIndex = -1;
+					if (key === '1') waveIndex = 0;
+					else if (key === '2') waveIndex = 1;
+					else if (key === '3') waveIndex = 2;
+					else if (key === '4') waveIndex = 3;
+					
+					if (waveIndex >= 0 && !e.ctrlKey && !e.altKey && !e.metaKey && !e.shiftKey) {
+						e.preventDefault();
+						if (window.setWaveType) {
+							window.setWaveType(waveTypes[waveIndex]);
+							updateWaveSelectorDisplay();
+						}
+					}
+				}, true);
+			}
+			
+			if (document.readyState === 'loading') {
+				document.addEventListener('DOMContentLoaded', initWaveSelector);
+			} else {
+				setTimeout(initWaveSelector, 200);
+			}
+		})();
 	</script>
 
 	<script>
@@ -1750,8 +1856,11 @@
 						tabindex=110></button>
 				</span>
 				<span class=control-group style="margin-right: 0px">
-					<button name="wave-selector" id="wave-selector" title="wave type selector"
-						style="width: 31.5px; margin-right: 20px; padding-left: 5px;" tabindex=300></button>
+					<button name="wave-selector" id="wave-selector" title="Wave Type: Click to cycle or press 1-4 (1=Sine, 2=Square, 3=Triangle, 4=Sawtooth)"
+						style="width: auto; min-width: 90px; margin-right: 20px; padding: 4px 8px; position: relative;" tabindex=300>
+						<span id="wave-selector-icon" style="display: inline-block; vertical-align: middle; margin-right: 6px;"></span>
+						<span id="wave-selector-label" style="font-size: 11px; vertical-align: middle;">Sine</span>
+					</button>
 					<button name="get-link" id="get-link" tabindex=310>Copy link</button>
 				</span>
 			</div>
@@ -1940,7 +2049,7 @@
 		<p>
 			To change the wave type from a sine wave (pure tone) to a square/triangle/sawtooth wave, click the
 			<span class=button-name><span class=image-sine></span></span>
-			button.
+			button to cycle through wave types, or press <kbd>1</kbd> (Sine), <kbd>2</kbd> (Square), <kbd>3</kbd> (Triangle), or <kbd>4</kbd> (Sawtooth).
 		</p>
 		<p>
 			You can mix tones by opening the Online Tone Generator
