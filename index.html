@@ -1241,7 +1241,7 @@
 			panR: null,
 			masterGain: null,
 			playing: false,
-			waveType: 'sine',
+			waveType: 'square',
 
 			init: function() {
 				// ALWAYS create fresh context and nodes for stereo
@@ -1425,7 +1425,7 @@
 
 				// Init stereo engine
 				window.StereoEngine.init();
-				window.StereoEngine.waveType = window.waveType || 'sine';
+				window.StereoEngine.waveType = window.waveType || 'square';
 				window.StereoEngine.setVolume(window.volume || 0.5);
 
 				// Resume playback if was playing
@@ -1648,7 +1648,7 @@
 				var label = document.getElementById('wave-selector-label');
 				if (!btn || !icon || !label) return;
 				
-				var currentType = window.waveType || 'sine';
+				var currentType = window.waveType || 'square';
 				icon.className = 'image-' + currentType;
 				icon.style.cssText = 'display: inline-block; vertical-align: middle; margin-right: 6px; width: 15px; height: 14px; background-image: url(icons.png); background-size: auto 15px;';
 				if (currentType === 'sine') icon.style.backgroundPosition = '-140px -2px';
@@ -1656,12 +1656,12 @@
 				else if (currentType === 'triangle') icon.style.backgroundPosition = '-156px -2px';
 				else if (currentType === 'sawtooth') icon.style.backgroundPosition = '-188px -2px';
 				
-				label.textContent = waveNames[currentType] || 'Sine';
+				label.textContent = waveNames[currentType] || 'Square';
 				btn.title = 'Wave Type: ' + waveNames[currentType] + ' (Press 1-4: 1=Sine, 2=Square, 3=Triangle, 4=Sawtooth)';
 			}
 			
 			function cycleWaveType() {
-				var currentType = window.waveType || 'sine';
+				var currentType = window.waveType || 'square';
 				var currentIndex = waveTypes.indexOf(currentType);
 				if (currentIndex === -1) currentIndex = 0;
 				var nextIndex = (currentIndex + 1) % waveTypes.length;
@@ -1859,7 +1859,7 @@
 					<button name="wave-selector" id="wave-selector" title="Wave Type: Click to cycle or press 1-4 (1=Sine, 2=Square, 3=Triangle, 4=Sawtooth)"
 						style="width: auto; min-width: 90px; margin-right: 20px; padding: 4px 8px; position: relative;" tabindex=300>
 						<span id="wave-selector-icon" style="display: inline-block; vertical-align: middle; margin-right: 6px;"></span>
-						<span id="wave-selector-label" style="font-size: 11px; vertical-align: middle;">Sine</span>
+						<span id="wave-selector-label" style="font-size: 11px; vertical-align: middle;">Square</span>
 					</button>
 					<button name="get-link" id="get-link" tabindex=310>Copy link</button>
 				</span>
